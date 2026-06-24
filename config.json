@@ -59,7 +59,16 @@
       "id": "wmqrkryfq8p",
       "name": "대장주",
       "alert": false,
-      "items": []
+      "items": [
+        {
+          "name": "삼성전자",
+          "code": "005930",
+          "type": "kr",
+          "tv": "KRX:005930",
+          "unit": "원",
+          "floor": null
+        }
+      ]
     }
   ],
   "report_time": "08:00"
