@@ -38,7 +38,17 @@
     {
       "id": "wmqrhcavfei",
       "name": "관심",
-      "items": []
+      "items": [
+        {
+          "name": "삼성전자",
+          "code": "005930",
+          "type": "kr",
+          "tv": "KRX:005930",
+          "unit": "원",
+          "floor": null,
+          "alert": false
+        }
+      ]
     }
   ]
 }
