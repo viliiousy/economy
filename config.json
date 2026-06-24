@@ -43,7 +43,7 @@
     {
       "id": "wmqrkr48fed",
       "name": "AI",
-      "alert": false,
+      "alert": true,
       "items": [
         {
           "name": "KODEX 미국AI광통신네트워크",
