@@ -91,6 +91,14 @@
           "tv": "NASDAQ:NVDA",
           "unit": "$",
           "floor": null
+        },
+        {
+          "name": "Alphabet Inc.",
+          "code": "GOOG.O",
+          "type": "us",
+          "tv": "NASDAQ:GOOG",
+          "unit": "$",
+          "floor": null
         }
       ]
     }
