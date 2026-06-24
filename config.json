@@ -47,6 +47,15 @@
           "unit": "원",
           "floor": null,
           "alert": false
+        },
+        {
+          "name": "NVIDIA Corporation",
+          "code": "NVDA.O",
+          "type": "us",
+          "tv": "NASDAQ:NVDA",
+          "unit": "$",
+          "floor": null,
+          "alert": false
         }
       ]
     }
