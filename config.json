@@ -44,7 +44,16 @@
       "id": "wmqrkr48fed",
       "name": "ai",
       "alert": false,
-      "items": []
+      "items": [
+        {
+          "name": "KODEX 미국AI광통신네트워크",
+          "code": "0173Y0",
+          "type": "kr",
+          "tv": "KRX:0173Y0",
+          "unit": "원",
+          "floor": null
+        }
+      ]
     },
     {
       "id": "wmqrkryfq8p",
