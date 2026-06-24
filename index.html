@@ -72,6 +72,11 @@
   .gcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
   .gtop{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer}
   .gtv{height:150px;border-top:1px solid var(--line)}
+  .seg2{display:inline-flex;background:var(--surface);border:1px solid var(--line2);border-radius:9px;padding:3px;margin-bottom:12px}
+  .seg2 button{border:none;background:transparent;color:var(--ink2);font-family:var(--sans);font-size:13px;font-weight:600;padding:6px 16px;border-radius:7px;cursor:pointer}
+  .seg2 button.on{background:var(--ink);color:#fff}
+  .combo{height:64vh;min-height:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+  .wsearch{width:100%;background:var(--surface);border:1px solid var(--line2);color:var(--ink);border-radius:11px;padding:11px 13px;font-size:15px;margin:0 0 10px;font-family:var(--sans);box-shadow:var(--sh)}
   .empty{color:var(--ink2);text-align:center;padding:46px 16px;font-size:14px;line-height:1.8}
   .empty .big{font-size:15px;color:var(--ink);font-weight:700;display:block;margin-bottom:4px}
   #setup{padding:22px 20px;max-width:460px;margin:0 auto}
@@ -153,7 +158,7 @@
 <div id="toast"></div>
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
 <div id="chart">
-  <div class="wrap" style="display:flex;flex-direction:column;height:100%">
+  <div style="display:flex;flex-direction:column;height:100%;width:100%">
     <div class="bar"><b id="c-name"></b><button class="ico" onclick="closeChart()" aria-label="닫기">✕</button></div>
     <div id="tvbox"></div>
   </div>
@@ -163,7 +168,7 @@
 <script>
 const LS=localStorage;
 let GH={owner:LS.getItem('gh_owner'),repo:LS.getItem('gh_repo'),branch:LS.getItem('gh_branch')||'main',token:LS.getItem('gh_token')};
-let CONFIG={move_pct:10,favorites:[],watchlists:[]}, SHA=null, PRICES={}, PREV={}, TICKERS=[], TAB='main', activeList=null, chartScope='fav', saveTimer=null;
+let CONFIG={move_pct:10,favorites:[],watchlists:[]}, SHA=null, PRICES={}, PREV={}, TICKERS=[], TAB='main', activeList=null, chartScope='fav', chartMode='combined', saveTimer=null;
 
 const TYPE={kr:'국내',us:'해외',exchange:'환율',metal:'금'};
 const unitFor=t=>t==='us'?'$':t==='metal'?'원/g':'원';
@@ -214,7 +219,9 @@ async function refreshPrices(){
     const j=await(await fetch(rawUrl('prices.json'))).json();
     PREV=PRICES;PRICES=j.items||{};
     document.getElementById('upd').textContent=j.updated?('업데이트 '+j.updated.replace('T',' ').slice(5,16)):'첫 시세 대기 중';
-    if(TAB!=='charts')render();
+    const ae=document.activeElement;
+    const typing=ae&&(ae.id==='wsearch'||(ae.classList&&ae.classList.contains('floor')));
+    if(TAB!=='charts'&&!typing)render();
   }catch(e){}
 }
 function queueSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveConfig,700);}
@@ -271,6 +278,7 @@ function renderWatch(){
     h+=`<div class="lhead"><span class="t">${esc(wl.name)}</span>
         <button class="ico" onclick="renameList('${wl.id}')" aria-label="이름변경" style="width:32px;height:32px;font-size:13px">✎</button>
         <button class="ico" onclick="deleteList('${wl.id}')" aria-label="리스트삭제" style="width:32px;height:32px;font-size:13px">🗑</button></div>`;
+    h+=`<input class="wsearch" id="wsearch" placeholder="이 리스트에 종목 추가 — 검색 (삼성, NVDA)" oninput="wSearch(this.value)"><div id="wresults"></div>`;
     h+=wl.items.length?wl.items.map(it=>priceCard(it,'L:'+wl.id)).join('')
       :'<div class="empty"><span class="big">이 리스트가 비어 있어요</span>검색에서 ＋를 눌러 담아보세요<br>알림 스위치를 켜면 알림도 와요</div>';
   }
@@ -281,17 +289,31 @@ function renderCharts(){
   let h='<div class="lists"><button class="lchip '+(chartScope==='fav'?'on':'')+'" onclick="chScope(\'fav\')">즐겨찾기</button>';
   CONFIG.watchlists.forEach(w=>{h+=`<button class="lchip ${chartScope===w.id?'on':''}" onclick="chScope('${w.id}')">${esc(w.name)}</button>`;});
   h+='</div>';
+  h+=`<div class="seg2"><button class="${chartMode==='combined'?'on':''}" onclick="chMode('combined')">함께 보기</button><button class="${chartMode==='separate'?'on':''}" onclick="chMode('separate')">따로 보기</button></div>`;
   const items=chartScope==='fav'?CONFIG.favorites:(CONFIG.watchlists.find(w=>w.id===chartScope)?.items||[]);
   if(!items.length){el.innerHTML=h+'<div class="empty"><span class="big">표시할 종목이 없어요</span>먼저 종목을 담아주세요</div>';return;}
-  h+='<div class="grid">'+items.map((it,i)=>{
-    const q=PRICES[keyOf(it)]||{};
-    return `<div class="gcard"><div class="gtop" onclick='openChart(${attr(it)})'>
-      <div><div class="nm" style="font-size:14px">${esc(it.name)}</div><div class="meta">${TYPE[it.type]||''}</div></div>
-      <div class="pwrap"><div class="price tnum" style="font-size:15px">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div>
-      </div><div class="gtv" id="g${i}"></div></div>`;
-  }).join('')+'</div>';
-  el.innerHTML=h;
-  if(window.TradingView)items.forEach((it,i)=>miniChart('g'+i,it.tv||('KRX:'+it.code)));
+  if(chartMode==='combined'){
+    el.innerHTML=h+'<div class="combo" id="combo"></div>';
+    comboChart('combo',items);
+  }else{
+    h+='<div class="grid">'+items.map((it,i)=>{
+      const q=PRICES[keyOf(it)]||{};
+      return `<div class="gcard"><div class="gtop" onclick='openChart(${attr(it)})'>
+        <div><div class="nm" style="font-size:14px">${esc(it.name)}</div><div class="meta">${TYPE[it.type]||''}</div></div>
+        <div class="pwrap"><div class="price tnum" style="font-size:15px">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div>
+        </div><div class="gtv" id="g${i}"></div></div>`;
+    }).join('')+'</div>';
+    el.innerHTML=h;
+    if(window.TradingView)items.forEach((it,i)=>miniChart('g'+i,it.tv||('KRX:'+it.code)));
+  }
+}
+function chMode(m){chartMode=m;renderCharts();}
+function comboChart(cid,items){
+  if(!window.TradingView)return;
+  try{new TradingView.widget({container_id:cid,symbol:items[0].tv||('KRX:'+items[0].code),interval:'D',
+    theme:'light',style:'2',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
+    hide_side_toolbar:true,allow_symbol_change:false,
+    compareSymbols:items.slice(1).map(it=>({symbol:it.tv||('KRX:'+it.code),position:'SameScale'}))});}catch(e){}
 }
 function miniChart(cid,sym){
   try{new TradingView.widget({container_id:cid,symbol:sym,interval:'D',theme:'light',style:'2',locale:'kr',
@@ -340,6 +362,15 @@ function deleteList(lid){const w=CONFIG.watchlists.find(x=>x.id===lid);if(!w)ret
 function _delList(lid){CONFIG.watchlists=CONFIG.watchlists.filter(w=>w.id!==lid);if(activeList===lid)activeList=CONFIG.watchlists[0]?.id||null;queueSave();closeOv();renderWatch();}
 function selList(lid){activeList=lid;renderWatch();}
 function chScope(s){chartScope=s;renderCharts();}
+function wSearch(v){
+  const box=document.getElementById('wresults');if(!box)return;v=v.trim();
+  if(!v){box.innerHTML='';return;}
+  box.innerHTML=rank(v).slice(0,8).map(e=>{
+    const it={name:e.n,code:e.c,type:e.t,tv:e.tv,unit:unitFor(e.t),floor:null};
+    return `<div class="res"><div style="flex:1"><div class="rn">${esc(e.n)}</div><div class="rc">${esc(e.c)} · ${TYPE[e.t]||''}</div></div><button class="add" onclick='wAdd(${attr(it)})'>＋ 담기</button></div>`;
+  }).join('');
+}
+function wAdd(it){if(!activeList)return;_addTo(activeList,it);}
 
 function removeItem(ctx,k){
   if(ctx==='F'){CONFIG.favorites=CONFIG.favorites.filter(x=>keyOf(x)!==k);queueSave();renderMain();return;}
