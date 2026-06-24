@@ -58,7 +58,7 @@
     {
       "id": "wmqrkryfq8p",
       "name": "대장주",
-      "alert": false,
+      "alert": true,
       "items": [
         {
           "name": "삼성전자",
