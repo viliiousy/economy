@@ -56,6 +56,15 @@
           "unit": "$",
           "floor": null,
           "alert": false
+        },
+        {
+          "name": "Tesla, Inc.",
+          "code": "TSLA.O",
+          "type": "us",
+          "tv": "NASDAQ:TSLA",
+          "unit": "$",
+          "floor": null,
+          "alert": false
         }
       ]
     }
