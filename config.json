@@ -75,6 +75,14 @@
           "tv": "KRX:000660",
           "unit": "원",
           "floor": null
+        },
+        {
+          "name": "Tesla, Inc.",
+          "code": "TSLA.O",
+          "type": "us",
+          "tv": "NASDAQ:TSLA",
+          "unit": "$",
+          "floor": null
         }
       ]
     }
