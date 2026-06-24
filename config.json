@@ -44,16 +44,7 @@
       "id": "wmqrkr48fed",
       "name": "ai",
       "alert": false,
-      "items": [
-        {
-          "name": "ai광통신",
-          "code": "0173Y0",
-          "type": "kr",
-          "tv": "KRX:0173Y0",
-          "unit": "원",
-          "floor": null
-        }
-      ]
+      "items": []
     },
     {
       "id": "wmqrkryfq8p",
