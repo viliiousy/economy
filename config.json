@@ -16,14 +16,6 @@
       "tv": "FX_IDC:USDKRW",
       "floor": null,
       "unit": "원"
-    },
-    {
-      "name": "엔비디아",
-      "code": "NVDA.O",
-      "type": "us",
-      "tv": "NASDAQ:NVDA",
-      "floor": null,
-      "unit": "$"
     }
   ],
   "watchlists": [
