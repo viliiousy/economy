@@ -18,14 +18,6 @@
       "unit": "원"
     },
     {
-      "name": "삼성전자",
-      "code": "005930",
-      "type": "kr",
-      "tv": "KRX:005930",
-      "floor": null,
-      "unit": "원"
-    },
-    {
       "name": "엔비디아",
       "code": "NVDA.O",
       "type": "us",
