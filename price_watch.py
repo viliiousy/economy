@@ -51,7 +51,7 @@ HEADERS = {
 
 PRICE_KEYS = ["closePrice", "nv", "nowVal", "close_val", "closeVal"]
 RATIO_KEYS = ["fluctuationsRatio", "cr", "changeRate", "fluctuationRate"]
-AMT_KEYS   = ["compareToPreviousClosePrice", "cv", "change_val", "changePrice"]
+AMT_KEYS   = ["compareToPreviousClosePrice", "fluctuations", "cv", "change_val", "changePrice"]
 
 
 def now_kst():
@@ -98,11 +98,9 @@ def _find_key(obj, keys):
 def _candidate_urls(item):
     t, code = item["type"], item["code"]
     if t == "metal":
-        return [f"https://m.stock.naver.com/front-api/v1/marketIndex/prices?category=metals&reutersCode={code}&page=1&pageSize=2",
-                f"https://api.stock.naver.com/marketindex/metals/{code}/basic"]
+        return [f"https://api.stock.naver.com/marketindex/metals/{code}/prices?pageSize=2"]
     if t == "exchange":
-        return [f"https://api.stock.naver.com/marketindex/exchange/{code}/basic",
-                f"https://m.stock.naver.com/front-api/v1/marketIndex/prices?category=exchange&reutersCode={code}&page=1&pageSize=2"]
+        return [f"https://api.stock.naver.com/marketindex/exchange/{code}/prices?pageSize=2"]
     if t == "kr":
         return [f"https://m.stock.naver.com/api/stock/{code}/basic",
                 f"https://api.stock.naver.com/stock/{code}/basic",
@@ -168,6 +166,8 @@ def link_for(item):
 def fmt_price(item, price):
     if item["type"] == "us":
         return f"${price:,.2f}"
+    if item["type"] == "exchange":
+        return f"{price:,.2f}{item.get('unit', '')}"
     return f"{price:,.0f}{item.get('unit', '')}"
 
 
