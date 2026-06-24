@@ -225,13 +225,27 @@ async function refreshPrices(){
     if(TAB!=='charts'&&!typing)render();
   }catch(e){}
 }
-function queueSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveConfig,700);}
-async function saveConfig(retry){
+function queueSave(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveConfig(0),700);}
+async function fetchSha(){
+  try{
+    const r=await fetch(apiUrl()+'?ref='+GH.branch,{headers:ghH()});
+    if(r.ok)return (await r.json()).sha;
+    if(r.status===404)return null;
+  }catch(e){}
+  return SHA;
+}
+async function saveConfig(attempt){
+  attempt=attempt||0;
   try{
     const body={message:'config update',content:b64utf8(JSON.stringify(CONFIG,null,2)),branch:GH.branch};
     if(SHA)body.sha=SHA;
     const r=await fetch(apiUrl(),{method:'PUT',headers:ghH(),body:JSON.stringify(body)});
-    if(r.status===409&&!retry){await loadConfig();return saveConfig(true);}
+    if((r.status===409||r.status===422)&&attempt<4){
+      SHA=await fetchSha();            // 내 변경은 그대로 두고 최신 sha만 갱신
+      await new Promise(res=>setTimeout(res,250*(attempt+1)));
+      return saveConfig(attempt+1);
+    }
+    if(r.status===401){toast('토큰 오류 — 설정 확인');return;}
     if(!r.ok){toast('저장 실패 ('+r.status+')');return;}
     SHA=(await r.json()).content.sha;toast('저장됨');
   }catch(e){toast('저장 실패');}
