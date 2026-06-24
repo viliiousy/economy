@@ -1,1 +1,1 @@
-{"items": {"metal:M04020000": {"floor_state": "below"}, "exchange:FX_USDKRW": {}}, "error_notified": false}
+{"items": {"metal:M04020000": {"floor_state": "in"}, "exchange:FX_USDKRW": {}, "kr:005930": {}, "us:NVDA.O": {}}, "error_notified": false, "last_report_date": "2026-06-24"}
