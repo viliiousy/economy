@@ -132,7 +132,7 @@
         <div class="right">
           <div class="upd" id="upd"></div>
           <button class="ico" onclick="refreshPrices()" aria-label="새로고침">⟳</button>
-          <button class="ico" onclick="openSetup()" aria-label="설정">⚙</button>
+          <button class="ico" onclick="openSettings()" aria-label="설정">⚙</button>
         </div>
       </div>
       <div class="rule"></div>
@@ -206,7 +206,7 @@ async function loadConfig(){
     if(r.status===404){SHA=null;return;}
     const j=await r.json();SHA=j.sha;const c=JSON.parse(utf8b64(j.content));
     if(!c.watchlists){const old=c.watchlist||[];c.watchlists=old.length?[{id:uid(),name:'관심종목',items:old}]:[];}
-    CONFIG={move_pct:c.move_pct??10,favorites:c.favorites||[],watchlists:c.watchlists};
+    CONFIG={move_pct:c.move_pct??10,favorites:c.favorites||[],watchlists:c.watchlists,report_time:c.report_time||'08:00'};
     CONFIG.favorites.forEach(f=>{if(f.alert===undefined)f.alert=true;});
     CONFIG.watchlists.forEach(w=>{if(w.alert===undefined)w.alert=false;});
   }catch(e){toast('설정 불러오기 실패');}
@@ -247,6 +247,7 @@ function priceCard(it,ctx){
     <div class="cbot">
       <label>알림가</label>
       <input class="floor tnum" type="number" placeholder="없음" value="${it.floor??''}" onchange="setFloor('${ctx}','${keyOf(it)}',this.value)">
+      <button class="chip-btn" onclick="cycleDir('${ctx}','${keyOf(it)}')" title="이상/이하 전환">${it.floorDir==='above'?'이상':'이하'}</button>
       ${ctx==='F'?`<label class="sw"><input type="checkbox" ${it.alert!==false?'checked':''} onchange="toggleFavAlert('${keyOf(it)}',this.checked)"><span></span></label><label>알림</label>`:''}
       <span class="sp"></span>
       <button class="chip-btn" onclick='openChart(${attr(it)})'>차트</button>
@@ -269,7 +270,9 @@ function renderMain(){
 function fSearch(v){
   const box=document.getElementById('fresults');if(!box)return;v=v.trim();
   if(!v){box.innerHTML='';return;}
-  box.innerHTML=rank(v).slice(0,8).map(e=>{
+  const code=/^[0-9A-Za-z]{6}$/.test(v)?v.toUpperCase():'';
+  const head=`<div class="res" style="border-style:dashed;cursor:pointer" onclick='manualSheet("F","${code}")'><div style="flex:1"><div class="rn" style="color:var(--gold)">＋ 코드로 직접 추가</div><div class="rc">검색에 없는 ETF 등 (예: 0173Y0)</div></div></div>`;
+  box.innerHTML=head+rank(v).slice(0,8).map(e=>{
     const it={name:e.n,code:e.c,type:e.t,tv:e.tv,unit:unitFor(e.t),floor:null,alert:true};
     return `<div class="res"><div style="flex:1"><div class="rn">${esc(e.n)}</div><div class="rc">${esc(e.c)} · ${TYPE[e.t]||''}</div></div><button class="add star" onclick='fAdd(${attr(it)})'>★ 추가</button></div>`;
   }).join('');
@@ -359,21 +362,54 @@ function chScope(s){chartScope=s;renderCharts();}
 function wSearch(v){
   const box=document.getElementById('wresults');if(!box)return;v=v.trim();
   if(!v){box.innerHTML='';return;}
-  box.innerHTML=rank(v).slice(0,8).map(e=>{
+  const code=/^[0-9A-Za-z]{6}$/.test(v)?v.toUpperCase():'';
+  const head=`<div class="res" style="border-style:dashed;cursor:pointer" onclick='manualSheet("${activeList}","${code}")'><div style="flex:1"><div class="rn" style="color:var(--gold)">＋ 코드로 직접 추가</div><div class="rc">검색에 없는 ETF 등 (예: 0173Y0)</div></div></div>`;
+  box.innerHTML=head+rank(v).slice(0,8).map(e=>{
     const it={name:e.n,code:e.c,type:e.t,tv:e.tv,unit:unitFor(e.t),floor:null};
     return `<div class="res"><div style="flex:1"><div class="rn">${esc(e.n)}</div><div class="rc">${esc(e.c)} · ${TYPE[e.t]||''}</div></div><button class="add" onclick='wAdd(${attr(it)})'>＋ 담기</button></div>`;
   }).join('');
 }
 function wAdd(it){if(!activeList)return;_addTo(activeList,it);}
+function manualSheet(target,code){
+  openSheet(`<h3>코드로 직접 추가</h3>
+    <input id="m-name" placeholder="표시 이름 (예: KODEX 반도체)">
+    <input id="m-code" placeholder="종목 코드 (예: 0173Y0)" value="${code?esc(code):''}">
+    <p class="hint" style="margin:0 0 12px">국내 종목·ETF용이에요. 해외주식은 검색으로 추가하세요.</p>
+    <div class="rowb"><button onclick="closeOv()">취소</button><button class="go" onclick="manualDo('${target}')">추가</button></div>`);
+  setTimeout(()=>{const f=document.getElementById(code?'m-name':'m-code');f&&f.focus();},60);
+}
+function manualDo(target){
+  const name=val2('m-name'),code=val2('m-code').toUpperCase();
+  if(!name||!code){toast('이름과 코드를 입력하세요');return;}
+  const it={name,code,type:'kr',tv:'KRX:'+code,unit:'원',floor:null};
+  closeOv();
+  if(target==='F')addFav(Object.assign({alert:true},it));else _addTo(target,it);
+}
+const val2=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
 
 function removeItem(ctx,k){
   if(ctx==='F'){CONFIG.favorites=CONFIG.favorites.filter(x=>keyOf(x)!==k);queueSave();renderMain();return;}
   const lid=ctx.slice(2);const w=CONFIG.watchlists.find(x=>x.id===lid);if(w){w.items=w.items.filter(x=>keyOf(x)!==k);queueSave();renderWatch();}
 }
-function setFloor(ctx,k,v){const arr=ctx==='F'?CONFIG.favorites:(CONFIG.watchlists.find(x=>x.id===ctx.slice(2))?.items||[]);const it=arr.find(x=>keyOf(x)===k);if(it){it.floor=v===''?null:parseFloat(v);queueSave();}}
+function findItem(ctx,k){return ctx==='F'?CONFIG.favorites.find(x=>keyOf(x)===k):(CONFIG.watchlists.find(w=>w.id===ctx.slice(2))?.items||[]).find(x=>keyOf(x)===k);}
+function setFloor(ctx,k,v){const it=findItem(ctx,k);if(it){it.floor=v===''?null:parseFloat(v);queueSave();}}
+function cycleDir(ctx,k){const it=findItem(ctx,k);if(it){it.floorDir=it.floorDir==='above'?'below':'above';queueSave();ctx==='F'?renderMain():renderWatch();}}
 function toggleFavAlert(k,on){const it=CONFIG.favorites.find(x=>keyOf(x)===k);if(it){it.alert=on;queueSave();}}
 function toggleListAlert(lid,on){const w=CONFIG.watchlists.find(x=>x.id===lid);if(w){w.alert=on;queueSave();}}
 
+function openSettings(){
+  openSheet(`<h3>알림 설정</h3>
+    <label style="font-size:12px;color:var(--ink2);font-weight:600">매일 리포트 받을 시간</label>
+    <input id="set-time" type="time" value="${CONFIG.report_time||'08:00'}">
+    <label style="font-size:12px;color:var(--ink2);font-weight:600">급변동 알림 기준 (%)</label>
+    <input id="set-move" type="number" value="${CONFIG.move_pct||10}">
+    <div class="rowb"><button onclick="closeOv();openSetup()">GitHub 연결 변경</button><button class="go" onclick="saveSettings()">저장</button></div>`);
+}
+function saveSettings(){
+  CONFIG.report_time=val2('set-time')||'08:00';
+  CONFIG.move_pct=parseFloat(val2('set-move'))||10;
+  queueSave();closeOv();toast('설정 저장됨');
+}
 function openSheet(html){document.getElementById('sheet').innerHTML=html;document.getElementById('ov').classList.add('on');}
 function closeOv(){document.getElementById('ov').classList.remove('on');}
 function askText(title,ph,cb,init){

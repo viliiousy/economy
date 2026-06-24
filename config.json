@@ -38,12 +38,6 @@
       "alert": true
     }
   ],
-  "watchlists": [
-    {
-      "id": "wmqrk8r3tjw",
-      "name": "AI",
-      "alert": false,
-      "items": []
-    }
-  ]
+  "watchlists": [],
+  "report_time": "08:00"
 }

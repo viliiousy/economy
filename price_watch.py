@@ -174,6 +174,7 @@ def load_config():
         old = c.get("watchlist", [])
         c["watchlists"] = [{"id": "w1", "name": "관심종목", "items": old}] if old else []
     c.setdefault("watchlists", [])
+    c.setdefault("report_time", "08:00")
     for f in c["favorites"]:
         f.setdefault("alert", True)
     for wl in c["watchlists"]:
@@ -284,20 +285,34 @@ def run_monitor():
 
         floor = it.get("floor")
         if floor:
-            if price < float(floor) and st.get("floor_state") != "below":
-                send_telegram(f"\U0001F4C9 {it['name']} 하한가 알림\n\n기준가 아래로 내려왔어요.\n"
+            f = float(floor)
+            d = it.get("floorDir", "below")
+            cond = (price < f) if d == "below" else (price > f)
+            if cond and st.get("floor_state") != "in":
+                word = "이하로 내려왔어요" if d == "below" else "이상으로 올라왔어요"
+                emo = "\U0001F4C9" if d == "below" else "\U0001F4C8"
+                send_telegram(f"{emo} {it['name']} 가격 알림\n\n기준가 {word}\n"
                               f"현재: {fmt_price(it, price)} ({fmt_chg(pct)})\n"
-                              f"기준: {float(floor):,.0f}{it.get('unit','')}\n{now_kst():%m-%d %H:%M}\n{link_for(it)}")
-                log(f"→ {it['name']} 하한가 알림")
-                st["floor_state"] = "below"
-            elif price >= float(floor):
-                st["floor_state"] = "above"
+                              f"기준: {f:,.0f}{it.get('unit','')} {'이하' if d=='below' else '이상'}\n"
+                              f"{now_kst():%m-%d %H:%M}\n{link_for(it)}")
+                log(f"→ {it['name']} 가격 알림 ({d})")
+                st["floor_state"] = "in"
+            elif not cond:
+                st["floor_state"] = "out"
 
         if pct is not None and abs(pct) >= move_pct and st.get("move_date") != today:
             send_telegram(f"\u26A1 {it['name']} 급변동 ({fmt_chg(pct)})\n\n전일대비 {move_pct:.0f}% 이상 움직였어요.\n"
                           f"현재: {fmt_price(it, price)}\n{now_kst():%m-%d %H:%M}\n{link_for(it)}")
             log(f"→ {it['name']} 급변동 알림")
             st["move_date"] = today
+
+    rt = cfg.get("report_time", "08:00")
+    if state.get("last_report_date") != today and f"{now_kst():%H:%M}" >= rt:
+        try:
+            run_report()
+            state["last_report_date"] = today
+        except Exception as e:
+            log(f"리포트 오류: {e}")
 
     save_json(STATE_FILE, state)
 
