@@ -1,10 +1,44 @@
 {
   "move_pct": 10,
   "favorites": [
-    {"name":"금(국내)","code":"M04020000","type":"metal","tv":"FX_IDC:XAUKRWG","floor":200000,"unit":"원/g"},
-    {"name":"원/달러","code":"FX_USDKRW","type":"exchange","tv":"FX_IDC:USDKRW","floor":null,"unit":"원"},
-    {"name":"삼성전자","code":"005930","type":"kr","tv":"KRX:005930","floor":null,"unit":"원"},
-    {"name":"엔비디아","code":"NVDA.O","type":"us","tv":"NASDAQ:NVDA","floor":null,"unit":"$"}
+    {
+      "name": "금(국내)",
+      "code": "M04020000",
+      "type": "metal",
+      "tv": "FX_IDC:XAUKRWG",
+      "floor": 200000,
+      "unit": "원/g"
+    },
+    {
+      "name": "원/달러",
+      "code": "FX_USDKRW",
+      "type": "exchange",
+      "tv": "FX_IDC:USDKRW",
+      "floor": null,
+      "unit": "원"
+    },
+    {
+      "name": "삼성전자",
+      "code": "005930",
+      "type": "kr",
+      "tv": "KRX:005930",
+      "floor": null,
+      "unit": "원"
+    },
+    {
+      "name": "엔비디아",
+      "code": "NVDA.O",
+      "type": "us",
+      "tv": "NASDAQ:NVDA",
+      "floor": null,
+      "unit": "$"
+    }
   ],
-  "watchlists": []
+  "watchlists": [
+    {
+      "id": "wmqrhcavfei",
+      "name": "관심",
+      "items": []
+    }
+  ]
 }
