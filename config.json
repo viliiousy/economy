@@ -83,6 +83,14 @@
           "tv": "NASDAQ:TSLA",
           "unit": "$",
           "floor": null
+        },
+        {
+          "name": "NVIDIA Corporation",
+          "code": "NVDA.O",
+          "type": "us",
+          "tv": "NASDAQ:NVDA",
+          "unit": "$",
+          "floor": null
         }
       ]
     }
