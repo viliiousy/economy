@@ -1,56 +1,10 @@
 {
   "move_pct": 10,
   "favorites": [
-    {
-      "name": "금(국내)",
-      "code": "M04020000",
-      "type": "metal",
-      "tv": "FX_IDC:XAUKRWG",
-      "floor": 200000,
-      "unit": "원/g"
-    },
-    {
-      "name": "원/달러",
-      "code": "FX_USDKRW",
-      "type": "exchange",
-      "tv": "FX_IDC:USDKRW",
-      "floor": null,
-      "unit": "원"
-    }
+    {"name":"금(국내)","code":"M04020000","type":"metal","tv":"FX_IDC:XAUKRWG","floor":200000,"unit":"원/g","alert":true},
+    {"name":"원/달러","code":"FX_USDKRW","type":"exchange","tv":"FX_IDC:USDKRW","floor":null,"unit":"원","alert":true},
+    {"name":"삼성전자","code":"005930","type":"kr","tv":"KRX:005930","floor":null,"unit":"원","alert":true},
+    {"name":"엔비디아","code":"NVDA.O","type":"us","tv":"NASDAQ:NVDA","floor":null,"unit":"$","alert":true}
   ],
-  "watchlists": [
-    {
-      "id": "wmqrhcavfei",
-      "name": "관심",
-      "items": [
-        {
-          "name": "삼성전자",
-          "code": "005930",
-          "type": "kr",
-          "tv": "KRX:005930",
-          "unit": "원",
-          "floor": null,
-          "alert": false
-        },
-        {
-          "name": "NVIDIA Corporation",
-          "code": "NVDA.O",
-          "type": "us",
-          "tv": "NASDAQ:NVDA",
-          "unit": "$",
-          "floor": null,
-          "alert": false
-        },
-        {
-          "name": "Tesla, Inc.",
-          "code": "TSLA.O",
-          "type": "us",
-          "tv": "NASDAQ:TSLA",
-          "unit": "$",
-          "floor": null,
-          "alert": false
-        }
-      ]
-    }
-  ]
+  "watchlists": []
 }

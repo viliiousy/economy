@@ -75,7 +75,7 @@
   .seg2{display:inline-flex;background:var(--surface);border:1px solid var(--line2);border-radius:9px;padding:3px;margin-bottom:12px}
   .seg2 button{border:none;background:transparent;color:var(--ink2);font-family:var(--sans);font-size:13px;font-weight:600;padding:6px 16px;border-radius:7px;cursor:pointer}
   .seg2 button.on{background:var(--ink);color:#fff}
-  .combo{height:64vh;min-height:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+  .combo{height:48vh;min-height:340px;margin-bottom:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
   .wsearch{width:100%;background:var(--surface);border:1px solid var(--line2);color:var(--ink);border-radius:11px;padding:11px 13px;font-size:15px;margin:0 0 10px;font-family:var(--sans);box-shadow:var(--sh)}
   .empty{color:var(--ink2);text-align:center;padding:46px 16px;font-size:14px;line-height:1.8}
   .empty .big{font-size:15px;color:var(--ink);font-weight:700;display:block;margin-bottom:4px}
@@ -141,16 +141,11 @@
       <button id="t-main" class="on" onclick="tab('main')">메인</button>
       <button id="t-watch" onclick="tab('watch')">관심종목</button>
       <button id="t-charts" onclick="tab('charts')">차트</button>
-      <button id="t-search" onclick="tab('search')">검색</button>
     </nav>
     <main>
       <div id="tab-main"></div>
       <div id="tab-watch" style="display:none"></div>
       <div id="tab-charts" style="display:none"></div>
-      <div id="tab-search" style="display:none">
-        <input id="search" placeholder="종목명 · 티커 검색  (삼성, NVDA, 금)" oninput="doSearch(this.value)">
-        <div id="results"><div class="empty"><span class="big">무엇이든 검색해 보세요</span>국내·해외 1만 5천 종목과 금·환율까지</div></div>
-      </div>
     </main>
   </div>
 </div>
@@ -184,7 +179,7 @@ function start(){
   document.getElementById('app').style.display='block';
   loadTickers();
   loadConfig().then(()=>{if(CONFIG.watchlists[0])activeList=CONFIG.watchlists[0].id;refreshPrices();render();});
-  setInterval(refreshPrices,60000);
+  setInterval(refreshPrices,30000);
 }
 function openSetup(){
   document.getElementById('app').style.display='none';
@@ -212,6 +207,8 @@ async function loadConfig(){
     const j=await r.json();SHA=j.sha;const c=JSON.parse(utf8b64(j.content));
     if(!c.watchlists){const old=c.watchlist||[];c.watchlists=old.length?[{id:uid(),name:'관심종목',items:old}]:[];}
     CONFIG={move_pct:c.move_pct??10,favorites:c.favorites||[],watchlists:c.watchlists};
+    CONFIG.favorites.forEach(f=>{if(f.alert===undefined)f.alert=true;});
+    CONFIG.watchlists.forEach(w=>{if(w.alert===undefined)w.alert=false;});
   }catch(e){toast('설정 불러오기 실패');}
 }
 async function refreshPrices(){
@@ -220,7 +217,7 @@ async function refreshPrices(){
     PREV=PRICES;PRICES=j.items||{};
     document.getElementById('upd').textContent=j.updated?('업데이트 '+j.updated.replace('T',' ').slice(5,16)):'첫 시세 대기 중';
     const ae=document.activeElement;
-    const typing=ae&&(ae.id==='wsearch'||(ae.classList&&ae.classList.contains('floor')));
+    const typing=ae&&(ae.id==='wsearch'||ae.id==='fsearch'||(ae.classList&&ae.classList.contains('floor')));
     if(TAB!=='charts'&&!typing)render();
   }catch(e){}
 }
@@ -250,7 +247,7 @@ function priceCard(it,ctx){
     <div class="cbot">
       <label>알림가</label>
       <input class="floor tnum" type="number" placeholder="없음" value="${it.floor??''}" onchange="setFloor('${ctx}','${keyOf(it)}',this.value)">
-      ${ctx.startsWith('L:')?`<label class="sw"><input type="checkbox" ${it.alert?'checked':''} onchange="toggleAlert('${ctx}','${keyOf(it)}',this.checked)"><span></span></label><label>알림</label>`:''}
+      ${ctx==='F'?`<label class="sw"><input type="checkbox" ${it.alert!==false?'checked':''} onchange="toggleFavAlert('${keyOf(it)}',this.checked)"><span></span></label><label>알림</label>`:''}
       <span class="sp"></span>
       <button class="chip-btn" onclick='openChart(${attr(it)})'>차트</button>
       <button class="chip-btn rm" onclick="removeItem('${ctx}','${keyOf(it)}')">삭제</button>
@@ -263,10 +260,21 @@ function render(){
   if(TAB==='main')renderMain();else if(TAB==='watch')renderWatch();else if(TAB==='charts')renderCharts();
 }
 function renderMain(){
-  document.getElementById('tab-main').innerHTML=CONFIG.favorites.length
+  let h=`<input class="wsearch" id="fsearch" placeholder="즐겨찾기에 추가 — 검색 (금, 삼성, NVDA)" oninput="fSearch(this.value)"><div id="fresults"></div>`;
+  h+=CONFIG.favorites.length
     ?CONFIG.favorites.map(it=>priceCard(it,'F')).join('')
-    :'<div class="empty"><span class="big">메인이 비어 있어요</span>검색에서 ★를 눌러 즐겨찾기에 담으면<br>여기에 실시간으로 표시되고 알림도 와요</div>';
+    :'<div class="empty"><span class="big">메인이 비어 있어요</span>위 검색창에서 종목을 찾아 ★를 누르면<br>여기에 실시간으로 표시되고 알림도 와요</div>';
+  document.getElementById('tab-main').innerHTML=h;
 }
+function fSearch(v){
+  const box=document.getElementById('fresults');if(!box)return;v=v.trim();
+  if(!v){box.innerHTML='';return;}
+  box.innerHTML=rank(v).slice(0,8).map(e=>{
+    const it={name:e.n,code:e.c,type:e.t,tv:e.tv,unit:unitFor(e.t),floor:null,alert:true};
+    return `<div class="res"><div style="flex:1"><div class="rn">${esc(e.n)}</div><div class="rc">${esc(e.c)} · ${TYPE[e.t]||''}</div></div><button class="add star" onclick='fAdd(${attr(it)})'>★ 추가</button></div>`;
+  }).join('');
+}
+function fAdd(it){addFav(it);}
 function renderWatch(){
   const el=document.getElementById('tab-watch');
   let h='<div class="lists">';
@@ -276,11 +284,12 @@ function renderWatch(){
   if(!CONFIG.watchlists.length){h+='<div class="empty"><span class="big">관심종목 리스트를 만들어 보세요</span>예: 반도체, AI, 배당주처럼<br>주제별로 여러 개를 만들 수 있어요</div>';}
   else if(wl){
     h+=`<div class="lhead"><span class="t">${esc(wl.name)}</span>
+        <label class="sw"><input type="checkbox" ${wl.alert?'checked':''} onchange="toggleListAlert('${wl.id}',this.checked)"><span></span></label><span style="font-size:12px;color:var(--ink2);font-weight:600">알림</span>
         <button class="ico" onclick="renameList('${wl.id}')" aria-label="이름변경" style="width:32px;height:32px;font-size:13px">✎</button>
         <button class="ico" onclick="deleteList('${wl.id}')" aria-label="리스트삭제" style="width:32px;height:32px;font-size:13px">🗑</button></div>`;
     h+=`<input class="wsearch" id="wsearch" placeholder="이 리스트에 종목 추가 — 검색 (삼성, NVDA)" oninput="wSearch(this.value)"><div id="wresults"></div>`;
     h+=wl.items.length?wl.items.map(it=>priceCard(it,'L:'+wl.id)).join('')
-      :'<div class="empty"><span class="big">이 리스트가 비어 있어요</span>검색에서 ＋를 눌러 담아보세요<br>알림 스위치를 켜면 알림도 와요</div>';
+      :'<div class="empty"><span class="big">이 리스트가 비어 있어요</span>위 검색창에서 종목을 담아보세요<br>리스트 알림을 켜면 담긴 종목 전체에 알림이 와요</div>';
   }
   el.innerHTML=h;
 }
@@ -293,7 +302,7 @@ function renderCharts(){
   const items=chartScope==='fav'?CONFIG.favorites:(CONFIG.watchlists.find(w=>w.id===chartScope)?.items||[]);
   if(!items.length){el.innerHTML=h+'<div class="empty"><span class="big">표시할 종목이 없어요</span>먼저 종목을 담아주세요</div>';return;}
   if(chartMode==='combined'){
-    el.innerHTML=h+'<div class="combo" id="combo"></div>';
+    el.innerHTML=h+'<div id="combo"></div>';
     comboChart('combo',items);
   }else{
     h+='<div class="grid">'+items.map((it,i)=>{
@@ -308,12 +317,18 @@ function renderCharts(){
   }
 }
 function chMode(m){chartMode=m;renderCharts();}
-function comboChart(cid,items){
+function symFor(it){
+  const base=it.tv||('KRX:'+it.code);
+  return it.type==='us' ? (base+'*FX_IDC:USDKRW') : base;   // 해외주식: 달러×환율 = 원화
+}
+function comboChart(wrapId,items){
+  const wrap=document.getElementById(wrapId);if(!wrap)return;
+  wrap.innerHTML='<div class="combo" id="cbmain"></div>';
   if(!window.TradingView)return;
-  try{new TradingView.widget({container_id:cid,symbol:items[0].tv||('KRX:'+items[0].code),interval:'D',
+  try{new TradingView.widget({container_id:'cbmain',symbol:symFor(items[0]),interval:'D',
     theme:'light',style:'2',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
     hide_side_toolbar:true,allow_symbol_change:false,
-    compareSymbols:items.slice(1).map(it=>({symbol:it.tv||('KRX:'+it.code),position:'SameScale'}))});}catch(e){}
+    compareSymbols:items.slice(1).map(it=>({symbol:symFor(it),position:'SameScale'}))});}catch(e){}
 }
 function miniChart(cid,sym){
   try{new TradingView.widget({container_id:cid,symbol:sym,interval:'D',theme:'light',style:'2',locale:'kr',
@@ -321,7 +336,7 @@ function miniChart(cid,sym){
     allow_symbol_change:false,save_image:false,withdateranges:false,backgroundColor:'#FFFFFF'});}catch(e){}
 }
 
-function tab(t){TAB=t;['main','watch','charts','search'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===t?'block':'none';document.getElementById('t-'+x).classList.toggle('on',x===t);});render();}
+function tab(t){TAB=t;['main','watch','charts'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===t?'block':'none';document.getElementById('t-'+x).classList.toggle('on',x===t);});render();}
 
 function rank(q){
   q=q.toLowerCase();const o=[];
@@ -330,32 +345,11 @@ function rank(q){
     if(s>=0)o.push([s,e.n.length,e]);}
   o.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);return o.slice(0,40).map(x=>x[2]);
 }
-function doSearch(v){
-  const box=document.getElementById('results');v=v.trim();
-  if(!v){box.innerHTML='<div class="empty"><span class="big">무엇이든 검색해 보세요</span>국내·해외 1만 5천 종목과 금·환율까지</div>';return;}
-  const list=rank(v);
-  if(!list.length){box.innerHTML='<div class="empty">검색 결과가 없어요</div>';return;}
-  box.innerHTML=list.map(e=>{
-    const it={name:e.n,code:e.c,type:e.t,tv:e.tv,unit:unitFor(e.t),floor:null};
-    return `<div class="res"><div style="flex:1"><div class="rn">${esc(e.n)}</div><div class="rc">${esc(e.c)} · ${TYPE[e.t]||''}</div></div>
-      <button class="add star" onclick='addFav(${attr(it)})'>★</button>
-      <button class="add" onclick='pickList(${attr(it)})'>＋ 담기</button></div>`;
-  }).join('');
-}
 const inList=(arr,it)=>arr.some(x=>keyOf(x)===keyOf(it));
-function addFav(it){if(inList(CONFIG.favorites,it)){toast('이미 즐겨찾기에 있어요');return;}CONFIG.favorites.push(it);queueSave();toast('★ 즐겨찾기 추가');if(TAB==='main')renderMain();}
+function addFav(it){if(inList(CONFIG.favorites,it)){toast('이미 즐겨찾기에 있어요');return;}CONFIG.favorites.push(Object.assign({alert:true},it));queueSave();toast('★ 즐겨찾기 추가');if(TAB==='main')renderMain();}
+function _addTo(lid,it){const w=CONFIG.watchlists.find(x=>x.id===lid);if(!w)return;if(inList(w.items,it)){toast('이미 담겨 있어요');return;}w.items.push(Object.assign({},it));queueSave();toast(w.name+'에 담음');if(TAB==='watch')renderWatch();}
 
-function pickList(it){
-  if(!CONFIG.watchlists.length){return askText('새 리스트 이름','예: 반도체',name=>{if(!name)return;const w={id:uid(),name,items:[]};CONFIG.watchlists.push(w);activeList=w.id;_addTo(w.id,it);});}
-  let h='<h3>어느 리스트에 담을까요?</h3>';
-  CONFIG.watchlists.forEach(w=>{h+=`<button class="opt" onclick="_addTo('${w.id}',${attr(it)});closeOv()">${esc(w.name)}</button>`;});
-  h+=`<button class="opt new" onclick='closeOv();pickNew(${attr(it)})'>＋ 새 리스트 만들기</button>`;
-  openSheet(h);
-}
-function pickNew(it){askText('새 리스트 이름','예: AI',name=>{if(!name)return;const w={id:uid(),name,items:[]};CONFIG.watchlists.push(w);activeList=w.id;_addTo(w.id,it);});}
-function _addTo(lid,it){const w=CONFIG.watchlists.find(x=>x.id===lid);if(!w)return;if(inList(w.items,it)){toast('이미 담겨 있어요');return;}it=Object.assign({},it,{alert:false});w.items.push(it);queueSave();toast(w.name+'에 담음');if(TAB==='watch')renderWatch();}
-
-function newList(){askText('새 리스트 이름','예: 배당주',name=>{if(!name)return;const w={id:uid(),name,items:[]};CONFIG.watchlists.push(w);activeList=w.id;queueSave();renderWatch();});}
+function newList(){askText('새 리스트 이름','예: 배당주',name=>{if(!name)return;const w={id:uid(),name,alert:false,items:[]};CONFIG.watchlists.push(w);activeList=w.id;queueSave();renderWatch();});}
 function renameList(lid){const w=CONFIG.watchlists.find(x=>x.id===lid);if(!w)return;askText('리스트 이름 변경',w.name,name=>{if(!name)return;w.name=name;queueSave();render();},w.name);}
 function deleteList(lid){const w=CONFIG.watchlists.find(x=>x.id===lid);if(!w)return;
   openSheet(`<h3>'${esc(w.name)}' 리스트를 삭제할까요?</h3><div class="rowb"><button onclick="closeOv()">취소</button><button class="go" onclick="_delList('${lid}')">삭제</button></div>`);}
@@ -377,7 +371,8 @@ function removeItem(ctx,k){
   const lid=ctx.slice(2);const w=CONFIG.watchlists.find(x=>x.id===lid);if(w){w.items=w.items.filter(x=>keyOf(x)!==k);queueSave();renderWatch();}
 }
 function setFloor(ctx,k,v){const arr=ctx==='F'?CONFIG.favorites:(CONFIG.watchlists.find(x=>x.id===ctx.slice(2))?.items||[]);const it=arr.find(x=>keyOf(x)===k);if(it){it.floor=v===''?null:parseFloat(v);queueSave();}}
-function toggleAlert(ctx,k,on){const w=CONFIG.watchlists.find(x=>x.id===ctx.slice(2));const it=w&&w.items.find(x=>keyOf(x)===k);if(it){it.alert=on;queueSave();}}
+function toggleFavAlert(k,on){const it=CONFIG.favorites.find(x=>keyOf(x)===k);if(it){it.alert=on;queueSave();}}
+function toggleListAlert(lid,on){const w=CONFIG.watchlists.find(x=>x.id===lid);if(w){w.alert=on;queueSave();}}
 
 function openSheet(html){document.getElementById('sheet').innerHTML=html;document.getElementById('ov').classList.add('on');}
 function closeOv(){document.getElementById('ov').classList.remove('on');}

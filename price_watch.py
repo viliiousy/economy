@@ -174,6 +174,10 @@ def load_config():
         old = c.get("watchlist", [])
         c["watchlists"] = [{"id": "w1", "name": "관심종목", "items": old}] if old else []
     c.setdefault("watchlists", [])
+    for f in c["favorites"]:
+        f.setdefault("alert", True)
+    for wl in c["watchlists"]:
+        wl.setdefault("alert", False)
     return c
 
 
@@ -215,12 +219,17 @@ def all_price_items(cfg):
 
 
 def alert_items(cfg):
-    out = list(cfg["favorites"])
-    keys = {item_key(i) for i in out}
-    for it in all_watch_items(cfg):
-        if it.get("alert") and item_key(it) not in keys:
-            keys.add(item_key(it))
+    out, keys = [], set()
+    for it in cfg["favorites"]:
+        if it.get("alert", True):
             out.append(it)
+            keys.add(item_key(it))
+    for wl in cfg["watchlists"]:
+        if wl.get("alert"):
+            for it in wl.get("items", []):
+                if item_key(it) not in keys:
+                    keys.add(item_key(it))
+                    out.append(it)
     return out
 
 
@@ -293,10 +302,9 @@ def run_monitor():
     save_json(STATE_FILE, state)
 
 
-def run_report():
-    cfg = load_config()
+def _send_group(title, items):
     lines = []
-    for it in cfg["favorites"]:
+    for it in items:
         try:
             price, pct = get_quote(it)
             lines.append(f"\u2022 {it['name']}: {fmt_price(it, price)} ({fmt_chg(pct)})")
@@ -304,8 +312,16 @@ def run_report():
             log(str(e))
             lines.append(f"\u2022 {it['name']}: 조회 실패")
     if not lines:
-        lines = ["(즐겨찾기가 비어 있어요. 대시보드에서 종목을 추가하세요.)"]
-    send_telegram(f"\U0001F4CA 아침 시세 브리핑\n{now_kst():%Y-%m-%d (%a) %H:%M}\n\n" + "\n".join(lines))
+        return
+    send_telegram(f"{title}\n{now_kst():%Y-%m-%d (%a) %H:%M}\n\n" + "\n".join(lines))
+
+
+def run_report():
+    cfg = load_config()
+    _send_group("\U0001F4CA 아침 시세 — 메인", cfg["favorites"])
+    for wl in cfg["watchlists"]:
+        if wl.get("alert"):
+            _send_group(f"\U0001F4CA 아침 시세 — {wl['name']}", wl.get("items", []))
     log("→ 아침 브리핑 전송")
 
 
