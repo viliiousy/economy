@@ -1,0 +1,20 @@
+name: Morning Report
+
+on:
+  schedule:
+    - cron: '0 23 * * *'      # 23:00 UTC = 08:00 KST
+  workflow_dispatch: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Report
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python price_watch.py report
