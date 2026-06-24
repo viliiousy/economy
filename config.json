@@ -54,6 +54,12 @@
           "floor": null
         }
       ]
+    },
+    {
+      "id": "wmqrkryfq8p",
+      "name": "대장주",
+      "alert": false,
+      "items": []
     }
   ],
   "report_time": "08:00"
