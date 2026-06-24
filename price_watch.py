@@ -169,9 +169,19 @@ def load_config():
     except Exception:
         c = {}
     c.setdefault("favorites", [])
-    c.setdefault("watchlist", [])
     c.setdefault("move_pct", 10)
+    if "watchlists" not in c:        # 구버전(단일 watchlist) 마이그레이션
+        old = c.get("watchlist", [])
+        c["watchlists"] = [{"id": "w1", "name": "관심종목", "items": old}] if old else []
+    c.setdefault("watchlists", [])
     return c
+
+
+def all_watch_items(cfg):
+    out = []
+    for wl in cfg["watchlists"]:
+        out += wl.get("items", [])
+    return out
 
 
 def load_state():
@@ -196,7 +206,7 @@ def item_key(it):
 
 def all_price_items(cfg):
     seen, out = set(), []
-    for it in cfg["favorites"] + cfg["watchlist"]:
+    for it in cfg["favorites"] + all_watch_items(cfg):
         k = item_key(it)
         if k not in seen:
             seen.add(k)
@@ -206,9 +216,10 @@ def all_price_items(cfg):
 
 def alert_items(cfg):
     out = list(cfg["favorites"])
-    fav = {item_key(i) for i in cfg["favorites"]}
-    for it in cfg["watchlist"]:
-        if it.get("alert") and item_key(it) not in fav:
+    keys = {item_key(i) for i in out}
+    for it in all_watch_items(cfg):
+        if it.get("alert") and item_key(it) not in keys:
+            keys.add(item_key(it))
             out.append(it)
     return out
 
