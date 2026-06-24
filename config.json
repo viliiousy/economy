@@ -67,6 +67,14 @@
           "tv": "KRX:005930",
           "unit": "원",
           "floor": null
+        },
+        {
+          "name": "SK하이닉스",
+          "code": "000660",
+          "type": "kr",
+          "tv": "KRX:000660",
+          "unit": "원",
+          "floor": null
         }
       ]
     }
