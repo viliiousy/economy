@@ -9,7 +9,7 @@
       "floor": 200000,
       "unit": "원/g",
       "alert": true,
-      "floorDir": "below"
+      "floorDir": "above"
     },
     {
       "name": "원/달러",
