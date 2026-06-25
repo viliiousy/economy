@@ -76,6 +76,10 @@
   .gcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
   .gtop{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer}
   .gtv{height:150px;border-top:1px solid var(--line)}
+  img.gtv.navimg{width:100%;height:150px;object-fit:cover;object-position:center;display:block;background:#fff}
+  .gtv.miss{display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:12px}
+  #mainItems{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+  @media(max-width:560px){#mainItems{grid-template-columns:1fr}}
   .seg2{display:inline-flex;background:var(--surface);border:1px solid var(--line2);border-radius:9px;padding:3px;margin-bottom:12px}
   .seg2 button{border:none;background:transparent;color:var(--ink2);font-family:var(--sans);font-size:13px;font-weight:600;padding:6px 16px;border-radius:7px;cursor:pointer}
   .seg2 button.on{background:var(--ink);color:#fff}
@@ -212,6 +216,7 @@ async function loadConfig(){
     if(!c.watchlists){const old=c.watchlist||[];c.watchlists=old.length?[{id:uid(),name:'관심종목',items:old}]:[];}
     CONFIG={move_pct:c.move_pct??10,favorites:c.favorites||[],watchlists:c.watchlists,report_times:c.report_times||(c.report_time?[c.report_time]:['08:00'])};
     if(!CONFIG.report_times.length)CONFIG.report_times=['08:00'];
+    CONFIG.market_alerts=Object.assign({kr_open:false,kr_close:false,us_open:false,us_close:false},c.market_alerts||{});
     CONFIG.favorites.forEach(f=>{if(f.alert===undefined)f.alert=true;});
     CONFIG.watchlists.forEach(w=>{if(w.alert===undefined)w.alert=false;});
   }catch(e){toast('설정 불러오기 실패');}
@@ -325,7 +330,7 @@ function enableSort(container,arr,rerender){
       dragging=true;card.classList.add('drag');
       if(navigator.vibrate)try{navigator.vibrate(12);}catch(_){}
       try{card.setPointerCapture(pid);}catch(_){}
-      const move=ev=>{ev.preventDefault();const a=getAfter(container,ev.clientY,card);if(a==null)container.appendChild(card);else container.insertBefore(card,a);};
+      const move=ev=>{ev.preventDefault();const r=getAfter(container,ev.clientX,ev.clientY,card);if(!r.el)container.appendChild(card);else container.insertBefore(card,r.before?r.el:r.el.nextSibling);};
       const up=()=>{
         dragging=false;card.classList.remove('drag');
         document.removeEventListener('pointermove',move);
@@ -338,10 +343,15 @@ function enableSort(container,arr,rerender){
     }
   });
 }
-function getAfter(c,y,drag){
-  let best=null,bo=-Infinity;
-  for(const ch of c.querySelectorAll('[data-sort]')){if(ch===drag)continue;const b=ch.getBoundingClientRect();const off=y-b.top-b.height/2;if(off<0&&off>bo){bo=off;best=ch;}}
-  return best;
+function getAfter(c,x,y,drag){
+  let best=null,bd=Infinity,before=true;
+  for(const ch of c.querySelectorAll('[data-sort]')){
+    if(ch===drag)continue;
+    const b=ch.getBoundingClientRect(),cx=b.left+b.width/2,cy=b.top+b.height/2;
+    const d=Math.hypot(x-cx,y-cy);
+    if(d<bd){bd=d;best=ch;before=(Math.abs(y-cy)>b.height*0.4)?(y<cy):(x<cx);}
+  }
+  return {el:best,before};
 }
 function render(){
   if(TAB==='main')renderMain();else if(TAB==='watch')renderWatch();else if(TAB==='charts')renderCharts();
@@ -399,23 +409,32 @@ function renderCharts(){
   }else{
     h+='<div class="grid">'+items.map((it,i)=>{
       const q=PRICES[keyOf(it)]||{};
+      let chart;
+      if(it.type==='kr')chart=`<img class="gtv navimg" src="${navImg(it.code)}" loading="lazy" alt="${esc(it.name)}" onerror="this.style.display='none'">`;
+      else if(it.type==='us'||it.type==='exchange')chart=`<div class="gtv" id="g${i}"></div>`;
+      else chart=`<div class="gtv miss">차트 미지원</div>`;
       return `<div class="gcard"><div class="gtop" onclick='openChart(${attr(it)})'>
         <div><div class="nm" style="font-size:14px">${esc(it.name)}</div><div class="meta">${TYPE[it.type]||''}</div></div>
         <div class="pwrap"><div class="price tnum" style="font-size:15px">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div>
-        </div><div class="gtv" id="g${i}"></div></div>`;
+        </div>${chart}</div>`;
     }).join('')+'</div>';
     el.innerHTML=h;
-    if(window.TradingView)items.forEach((it,i)=>miniChart('g'+i,it.tv||('KRX:'+it.code)));
+    if(window.TradingView)items.forEach((it,i)=>{if(it.type==='us'||it.type==='exchange')miniChart('g'+i,it.tv||'');});
   }
 }
+const navImg=(code,big)=>`https://ssl.pstatic.net/imgfinance/chart/item/${big?'area/day':'candle/day'}/${code}.png?t=`+Math.floor(Date.now()/300000);
 function chMode(m){chartMode=m;renderCharts();}
 function symFor(it){return it.tv||('KRX:'+it.code);}   // 순수 심볼 → TradingView가 %로 정규화해 KR·US 함께 비교
 function comboChart(wrapId,items){
   const wrap=document.getElementById(wrapId);if(!wrap)return;
-  // 금·환율은 TradingView 심볼이 불안정(없으면 애플로 폴백) → 함께보기 %비교엔 국내·해외 주식만
-  const syms=items.filter(it=>it.type==='kr'||it.type==='us').map(symFor).filter(s=>s&&s.includes(':'));
-  if(!syms.length){wrap.innerHTML='<div class="empty"><span class="big">함께 볼 주식이 없어요</span>국내·해외 주식을 담아주세요<br>(금·환율은 \'따로 보기\'에서 확인)</div>';return;}
-  wrap.innerHTML='<div class="combo" id="cbmain"></div>';
+  // 겹쳐보기(오버레이)는 TradingView만 가능 → 위젯이 지원하는 미국주식·환율만. 한국 종목/ETF·금은 위젯에 없음
+  const syms=items.filter(it=>it.type==='us'||it.type==='exchange').map(symFor).filter(s=>s&&s.includes(':'));
+  const hasKr=items.some(it=>it.type==='kr');
+  if(!syms.length){
+    wrap.innerHTML='<div class="empty"><span class="big">겹쳐 볼 종목이 없어요</span>겹쳐보기는 미국주식·환율만 지원해요'+(hasKr?'<br>한국 종목은 \'따로 보기\'에서 네이버 차트로 확인하세요':'')+'</div>';
+    return;
+  }
+  wrap.innerHTML='<div class="combo" id="cbmain"></div>'+(hasKr?'<div class="hint" style="margin:8px 2px 0">※ 한국 종목은 겹쳐보기에 표시되지 않아요 (따로 보기에서 확인)</div>':'');
   if(!window.TradingView)return;
   try{new TradingView.widget({container_id:'cbmain',symbol:syms[0],interval:'D',
     theme:'light',style:'2',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
@@ -493,10 +512,20 @@ function openSettings(){
 }
 function renderSettings(){
   const rows=SETTIMES.map((t,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:7px"><input type="time" value="${t}" onchange="SETTIMES[${i}]=this.value" style="flex:1"><button class="chip-btn rm" onclick="SETTIMES.splice(${i},1);renderSettings()">삭제</button></div>`).join('');
+  const ma=CONFIG.market_alerts||{};
+  const mk=(k,label)=>`<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><span style="font-size:14px">${label}</span><span class="sw"><input type="checkbox" ${ma[k]?'checked':''} onchange="CONFIG.market_alerts['${k}']=this.checked"><span></span></span></label>`;
   openSheet(`<h3>알림 설정</h3>
     <label style="font-size:12px;color:var(--ink2);font-weight:600">매일 리포트 받을 시간 (여러 개 가능)</label>
     <div style="margin:6px 0 4px">${rows||'<p class="hint" style="margin:4px 0">시간을 추가하세요</p>'}</div>
     <button class="chip-btn" style="margin:0 0 14px" onclick="SETTIMES.push('08:00');renderSettings()">＋ 시간 추가</button>
+    <label style="font-size:12px;color:var(--ink2);font-weight:600">장 시작·마감 시세 알림</label>
+    <div style="margin:8px 0 6px">
+      ${mk('kr_open','🇰🇷 한국 장 시작 (09:00)')}
+      ${mk('kr_close','🇰🇷 한국 장 마감 (15:30)')}
+      ${mk('us_open','🇺🇸 미국 장 시작 (밤 22:30경)')}
+      ${mk('us_close','🇺🇸 미국 장 마감 (새벽 05:00경)')}
+    </div>
+    <p class="hint" style="margin:0 0 12px">켜면 그 시각에 메인 + 알림 켠 리스트 시세를 보내드려요.</p>
     <label style="font-size:12px;color:var(--ink2);font-weight:600">급변동 알림 기준 (%)</label>
     <input id="set-move" type="number" value="${CONFIG.move_pct||10}">
     <div class="rowb"><button onclick="closeOv();openSetup()">GitHub 연결 변경</button><button class="go" onclick="saveSettings()">저장</button></div>`);
@@ -521,11 +550,16 @@ document.getElementById('ov').addEventListener('click',e=>{if(e.target.id==='ov'
 function openChart(it){
   document.getElementById('c-name').textContent=it.name;
   document.getElementById('chart').classList.add('on');
-  document.getElementById('tvbox').innerHTML='<div id="tvfull" style="height:100%"></div>';
-  if(window.TradingView){new TradingView.widget({container_id:'tvfull',symbol:it.tv||('KRX:'+it.code),interval:'D',
-    theme:'light',style:'1',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
-    hide_side_toolbar:true,allow_symbol_change:false});}
-  else document.getElementById('tvbox').innerHTML='<div class="empty">차트를 불러오지 못했어요</div>';
+  const box=document.getElementById('tvbox');
+  if(it.type==='kr'){
+    box.innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;background:#fff;overflow:auto">
+      <img src="${navImg(it.code,false)}" alt="${esc(it.name)}" style="max-width:100%;height:auto" onerror="this.parentNode.innerHTML='<div class=\\'empty\\'>차트를 불러오지 못했어요</div>'"></div>`;
+  }else if((it.type==='us'||it.type==='exchange')&&window.TradingView){
+    box.innerHTML='<div id="tvfull" style="height:100%"></div>';
+    new TradingView.widget({container_id:'tvfull',symbol:it.tv||'',interval:'D',
+      theme:'light',style:'1',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
+      hide_side_toolbar:true,allow_symbol_change:false});
+  }else box.innerHTML='<div class="empty">이 항목은 차트를 지원하지 않아요</div>';
 }
 function closeChart(){document.getElementById('chart').classList.remove('on');document.getElementById('tvbox').innerHTML='';}
 
