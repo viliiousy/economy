@@ -6,7 +6,7 @@
       "code": "M04020000",
       "type": "metal",
       "tv": "FX_IDC:XAUKRWG",
-      "floor": 199998,
+      "floor": 196999,
       "unit": "원/g",
       "alert": true,
       "floorDir": "below"
