@@ -84,6 +84,8 @@
   @media(max-width:560px){#mainItems{grid-template-columns:1fr}}
   .seg2{display:inline-flex;background:var(--surface);border:1px solid var(--line2);border-radius:9px;padding:3px;margin-bottom:12px}
   .seg2 button{border:none;background:transparent;color:var(--ink2);font-family:var(--sans);font-size:13px;font-weight:600;padding:6px 16px;border-radius:7px;cursor:pointer}
+  .seg2.tfbar{display:flex;width:100%;max-width:420px}
+  .seg2.tfbar button{flex:1;padding:6px 8px;font-size:12.5px;white-space:nowrap}
   .seg2 button.on{background:var(--ink);color:#fff}
   .combo{height:48vh;min-height:340px;margin-bottom:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
   .wsearch{width:100%;background:var(--surface);border:1px solid var(--line2);color:var(--ink);border-radius:11px;padding:11px 13px;font-size:15px;margin:0 0 10px;font-family:var(--sans);box-shadow:var(--sh)}
@@ -173,7 +175,7 @@
 <script>
 const LS=localStorage;
 let GH={owner:LS.getItem('gh_owner'),repo:LS.getItem('gh_repo'),branch:LS.getItem('gh_branch')||'main',token:LS.getItem('gh_token')};
-let CONFIG={move_pct:10,favorites:[],watchlists:[]}, SHA=null, PRICES={}, PREV={}, TICKERS=[], TAB='main', activeList=null, chartScope='fav', chartMode='combined', chartInterval='d', HIST={items:{}}, HIST_AT=0, saveTimer=null;
+let CONFIG={move_pct:10,favorites:[],watchlists:[]}, SHA=null, PRICES={}, PREV={}, TICKERS=[], TAB='main', activeList=null, chartScope='fav', chartMode='combined', chartTF='d', HIST={items:{}}, HIST_AT=0, saveTimer=null;
 
 const TYPE={kr:'국내',us:'해외',exchange:'환율',metal:'금'};
 const unitFor=t=>t==='us'?'$':t==='metal'?'원/g':'원';
@@ -403,14 +405,14 @@ function renderCharts(){
   CONFIG.watchlists.forEach(w=>{h+=`<button class="lchip ${chartScope===w.id?'on':''}" onclick="chScope('${w.id}')">${esc(w.name)}</button>`;});
   h+='</div>';
   h+=`<div class="seg2"><button class="${chartMode==='combined'?'on':''}" onclick="chMode('combined')">함께 보기</button><button class="${chartMode==='separate'?'on':''}" onclick="chMode('separate')">따로 보기</button></div>`;
-  h+=`<div class="seg2" style="max-width:200px"><button class="${chartInterval==='d'?'on':''}" onclick="chInt('d')">일봉</button><button class="${chartInterval==='w'?'on':''}" onclick="chInt('w')">주봉</button></div>`;
+  h+=`<div class="seg2 tfbar">${[['1','1분'],['30','30분'],['60','1시간'],['d','일'],['w','주'],['mo','월']].map(([v,l])=>`<button class="${chartTF===v?'on':''}" onclick="chTF('${v}')">${l}</button>`).join('')}</div>`;
   const items=chartScope==='fav'?CONFIG.favorites:(CONFIG.watchlists.find(w=>w.id===chartScope)?.items||[]);
   if(!items.length){el.innerHTML=h+'<div class="empty"><span class="big">표시할 종목이 없어요</span>먼저 종목을 담아주세요</div>';return;}
   el.innerHTML=h+'<div id="chartArea"><div class="empty">차트 불러오는 중…</div></div>';
   loadHistory().then(()=>{if(TAB==='charts')drawCharts(items);});
 }
 function chMode(m){chartMode=m;renderCharts();}
-function chInt(v){chartInterval=v;renderCharts();}
+function chTF(v){chartTF=v;renderCharts();}
 async function loadHistory(){
   if(Object.keys(HIST.items||{}).length && Date.now()-HIST_AT<60000)return;
   try{
@@ -427,7 +429,7 @@ async function loadHistory(){
 const LWUP='#E03A4E',LWDN='#2563EB';
 const candleData=a=>a.map(r=>({time:r[0],open:r[1],high:r[2],low:r[3],close:r[4]}));
 const pctData=a=>{if(!a.length)return [];const b=a[0][4]||1;return a.map(r=>({time:r[0],value:(r[4]/b-1)*100}));};
-function serOf(it){const hd=HIST.items[keyOf(it)];return hd&&hd[chartInterval]||null;}
+function serOf(it){const hd=HIST.items[keyOf(it)];return hd&&hd[chartTF]||null;}
 function drawCharts(items){
   const area=document.getElementById('chartArea');if(!area)return;
   if(!window.LightweightCharts){area.innerHTML='<div class="empty">차트 라이브러리를 불러오지 못했어요</div>';return;}
@@ -453,19 +455,31 @@ function drawSeparate(area,items){
 }
 const PAL=['#2563EB','#E03A4E','#0E9F6E','#9333EA','#F59E0B','#0891B2','#DB2777','#65A30D','#E11D48','#4F46E5'];
 function drawCombined(area,items){
-  const list=items.filter(it=>{const s=serOf(it);return s&&s.length;});
-  if(!list.length){area.innerHTML='<div class="empty"><span class="big">차트 데이터 준비 중</span>종목을 담으면 20분 내 자동 수집돼요<br>(수집 후 다시 열어보세요)</div>';return;}
-  area.innerHTML='<div class="combo" id="cbig"></div><div id="cblegend" class="clegend"></div>';
-  const chart=LightweightCharts.createChart(document.getElementById('cbig'),Object.assign(baseChartOpts(Math.round(window.innerHeight*0.46)),{}));
-  let leg='';
-  list.forEach((it,i)=>{
-    const c=PAL[i%PAL.length];
-    const s=chart.addLineSeries({color:c,lineWidth:2,priceFormat:{type:'percent'},lastValueVisible:true,priceLineVisible:false});
-    s.setData(pctData(serOf(it)));
-    leg+=`<span class="lgi"><i style="background:${c}"></i>${esc(it.name)}</span>`;
+  const hasSer=it=>{const s=serOf(it);return s&&s.length;};
+  const groups=[
+    {label:'한국 (원)', list:items.filter(it=>it.type==='kr'&&hasSer(it))},
+    {label:'해외 ($)', list:items.filter(it=>it.type==='us'&&hasSer(it))},
+    {label:'환율·지표', list:items.filter(it=>(it.type==='exchange')&&hasSer(it))},
+  ].filter(g=>g.list.length);
+  if(!groups.length){area.innerHTML='<div class="empty"><span class="big">차트 데이터 준비 중</span>종목을 담으면 20분 내 자동 수집돼요<br>(수집 후 다시 열어보세요)</div>';return;}
+  area.innerHTML='';
+  groups.forEach((g,gi)=>{
+    const wrap=document.createElement('div');
+    wrap.innerHTML=`<div class="meta" style="font-weight:700;color:var(--ink2);margin:10px 2px 4px">${g.label}</div><div class="combo" id="cb${gi}"></div><div class="clegend" id="lg${gi}"></div>`;
+    area.appendChild(wrap);
+    const chart=LightweightCharts.createChart(document.getElementById('cb'+gi),Object.assign(baseChartOpts(Math.round(window.innerHeight*0.40)),{}));
+    let leg='';
+    g.list.forEach((it,i)=>{
+      const ser=serOf(it),c=PAL[i%PAL.length];
+      const s=chart.addLineSeries({color:c,lineWidth:2,priceLineVisible:false,lastValueVisible:true,
+        priceFormat:{type:'price',precision:it.type==='us'?2:0,minMove:it.type==='us'?0.01:1}});
+      s.setData(ser.map(r=>({time:r[0],value:r[4]})));
+      const q=PRICES[keyOf(it)]||{};
+      leg+=`<span class="lgi"><i style="background:${c}"></i>${esc(it.name)} <b class="tnum">${fmtPrice(it,q.price)}</b></span>`;
+    });
+    chart.timeScale().fitContent();
+    document.getElementById('lg'+gi).innerHTML=leg;
   });
-  chart.timeScale().fitContent();
-  document.getElementById('cblegend').innerHTML=leg;
 }
 
 function tab(t){TAB=t;['main','watch','charts'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===t?'block':'none';document.getElementById('t-'+x).classList.toggle('on',x===t);});render();}
