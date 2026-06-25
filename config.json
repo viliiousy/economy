@@ -2,15 +2,6 @@
   "move_pct": 10,
   "favorites": [
     {
-      "name": "원/달러",
-      "code": "FX_USDKRW",
-      "type": "exchange",
-      "tv": "FX_IDC:USDKRW",
-      "floor": null,
-      "unit": "원",
-      "alert": true
-    },
-    {
       "name": "금(국내)",
       "code": "M04020000",
       "type": "metal",
@@ -19,6 +10,15 @@
       "unit": "원/g",
       "alert": true,
       "floorDir": "below"
+    },
+    {
+      "name": "원/달러",
+      "code": "FX_USDKRW",
+      "type": "exchange",
+      "tv": "FX_IDC:USDKRW",
+      "floor": null,
+      "unit": "원",
+      "alert": true
     },
     {
       "name": "삼성전자",
