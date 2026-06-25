@@ -221,9 +221,9 @@ async function refreshPrices(){
     const j=await(await fetch(rawUrl('prices.json'))).json();
     PREV=PRICES;PRICES=j.items||{};
     document.getElementById('upd').textContent=j.updated?('업데이트 '+j.updated.replace('T',' ').slice(5,16)):'첫 시세 대기 중';
-    const ae=document.activeElement;
-    const typing=ae&&(ae.id==='wsearch'||ae.id==='fsearch'||(ae.classList&&ae.classList.contains('floor')));
-    if(TAB!=='charts'&&!typing)render();
+    if(TAB==='charts')return;
+    if(document.querySelector('.pwrap[data-pk]'))updatePricesInPlace();
+    else render();
   }catch(e){}
 }
 function queueSave(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveConfig(0),700);}
@@ -255,13 +255,40 @@ async function saveConfig(attempt){
 function fmtPrice(it,p){if(p==null)return '—';if(it.type==='us')return '$'+p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});if(it.type==='exchange')return p.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})+(it.unit||'원');return Math.round(p).toLocaleString('ko-KR')+(it.unit||'');}
 function deltaHtml(pct){if(pct==null)return '<div class="delta flat">—</div>';const c=pct>0?'up':pct<0?'dn':'flat';const a=pct>0?'▲':pct<0?'▼':'–';return `<div class="delta ${c} tnum">${a} ${Math.abs(pct).toFixed(2)}%</div>`;}
 function flashClass(it){const k=keyOf(it),a=PRICES[k],b=PREV[k];if(!a||!b||a.price===b.price)return '';return a.price>b.price?'fl-up':'fl-dn';}
+function countUp(el,from,to,it,dur){
+  dur=dur||800;if(el._raf)cancelAnimationFrame(el._raf);
+  const t0=performance.now(),ease=t=>1-Math.pow(1-t,3);
+  function frame(now){
+    const t=Math.min(1,(now-t0)/dur);
+    el.textContent=fmtPrice(it,from+(to-from)*ease(t));
+    if(t<1)el._raf=requestAnimationFrame(frame);else{el.textContent=fmtPrice(it,to);el._raf=null;}
+  }
+  el._raf=requestAnimationFrame(frame);
+}
+function updatePricesInPlace(){
+  document.querySelectorAll('.pwrap[data-pk]').forEach(w=>{
+    const k=w.dataset.pk,it={type:w.dataset.ptype,unit:w.dataset.punit};
+    const q=PRICES[k]||{},pv=PREV[k]||{};
+    const cur=q.price==null?null:q.price,prev=pv.price==null?null:pv.price;
+    const pe=w.querySelector('.price');
+    if(pe){
+      if(cur!=null&&prev!=null&&cur!==prev){
+        pe.classList.remove('fl-up','fl-dn');void pe.offsetWidth;
+        pe.classList.add(cur>prev?'fl-up':'fl-dn');
+        countUp(pe,prev,cur,it);
+      }else if(cur!=null&&!pe._raf){pe.textContent=fmtPrice(it,cur);}
+      else if(cur==null){pe.textContent='—';}
+    }
+    const d=w.querySelector('.delta');if(d)d.outerHTML=deltaHtml(q.pct);
+  });
+}
 
 function priceCard(it,ctx){
   const q=PRICES[keyOf(it)]||{};
   return `<div class="card" data-sort="${keyOf(it)}">
     <div class="ctop">
       <div><div class="nm">${esc(it.name)}<span class="badge">${TYPE[it.type]||''}</span></div><div class="meta">${esc(it.code)}</div></div>
-      <div class="pwrap"><div class="price tnum ${flashClass(it)}">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div>
+      <div class="pwrap" data-pk="${keyOf(it)}" data-ptype="${it.type}" data-punit="${it.unit||''}"><div class="price tnum ${flashClass(it)}">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div>
     </div>
     <div class="cbot">
       <label>알림가</label>
@@ -376,10 +403,7 @@ function renderCharts(){
   }
 }
 function chMode(m){chartMode=m;renderCharts();}
-function symFor(it){
-  const base=it.tv||('KRX:'+it.code);
-  return it.type==='us' ? (base+'*FX_IDC:USDKRW') : base;   // 해외주식: 달러×환율 = 원화
-}
+function symFor(it){return it.tv||('KRX:'+it.code);}   // 순수 심볼 → TradingView가 %로 정규화해 KR·US 함께 비교
 function comboChart(wrapId,items){
   const wrap=document.getElementById(wrapId);if(!wrap)return;
   wrap.innerHTML='<div class="combo" id="cbmain"></div>';
