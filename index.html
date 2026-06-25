@@ -210,7 +210,8 @@ async function loadConfig(){
     if(r.status===404){SHA=null;return;}
     const j=await r.json();SHA=j.sha;const c=JSON.parse(utf8b64(j.content));
     if(!c.watchlists){const old=c.watchlist||[];c.watchlists=old.length?[{id:uid(),name:'관심종목',items:old}]:[];}
-    CONFIG={move_pct:c.move_pct??10,favorites:c.favorites||[],watchlists:c.watchlists,report_time:c.report_time||'08:00'};
+    CONFIG={move_pct:c.move_pct??10,favorites:c.favorites||[],watchlists:c.watchlists,report_times:c.report_times||(c.report_time?[c.report_time]:['08:00'])};
+    if(!CONFIG.report_times.length)CONFIG.report_times=['08:00'];
     CONFIG.favorites.forEach(f=>{if(f.alert===undefined)f.alert=true;});
     CONFIG.watchlists.forEach(w=>{if(w.alert===undefined)w.alert=false;});
   }catch(e){toast('설정 불러오기 실패');}
@@ -452,16 +453,25 @@ function cycleDir(ctx,k){const it=findItem(ctx,k);if(it){it.floorDir=it.floorDir
 function toggleFavAlert(k,on){const it=CONFIG.favorites.find(x=>keyOf(x)===k);if(it){it.alert=on;queueSave();}}
 function toggleListAlert(lid,on){const w=CONFIG.watchlists.find(x=>x.id===lid);if(w){w.alert=on;queueSave();}}
 
+let SETTIMES=[];
 function openSettings(){
+  SETTIMES=(CONFIG.report_times&&CONFIG.report_times.length?CONFIG.report_times.slice():['08:00']);
+  renderSettings();
+}
+function renderSettings(){
+  const rows=SETTIMES.map((t,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:7px"><input type="time" value="${t}" onchange="SETTIMES[${i}]=this.value" style="flex:1"><button class="chip-btn rm" onclick="SETTIMES.splice(${i},1);renderSettings()">삭제</button></div>`).join('');
   openSheet(`<h3>알림 설정</h3>
-    <label style="font-size:12px;color:var(--ink2);font-weight:600">매일 리포트 받을 시간</label>
-    <input id="set-time" type="time" value="${CONFIG.report_time||'08:00'}">
+    <label style="font-size:12px;color:var(--ink2);font-weight:600">매일 리포트 받을 시간 (여러 개 가능)</label>
+    <div style="margin:6px 0 4px">${rows||'<p class="hint" style="margin:4px 0">시간을 추가하세요</p>'}</div>
+    <button class="chip-btn" style="margin:0 0 14px" onclick="SETTIMES.push('08:00');renderSettings()">＋ 시간 추가</button>
     <label style="font-size:12px;color:var(--ink2);font-weight:600">급변동 알림 기준 (%)</label>
     <input id="set-move" type="number" value="${CONFIG.move_pct||10}">
     <div class="rowb"><button onclick="closeOv();openSetup()">GitHub 연결 변경</button><button class="go" onclick="saveSettings()">저장</button></div>`);
 }
 function saveSettings(){
-  CONFIG.report_time=val2('set-time')||'08:00';
+  const times=[...new Set(SETTIMES.filter(t=>/^\d\d:\d\d$/.test(t)))].sort();
+  CONFIG.report_times=times.length?times:['08:00'];
+  delete CONFIG.report_time;
   CONFIG.move_pct=parseFloat(val2('set-move'))||10;
   queueSave();closeOv();toast('설정 저장됨');
 }

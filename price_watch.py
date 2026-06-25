@@ -174,7 +174,11 @@ def load_config():
         old = c.get("watchlist", [])
         c["watchlists"] = [{"id": "w1", "name": "관심종목", "items": old}] if old else []
     c.setdefault("watchlists", [])
-    c.setdefault("report_time", "08:00")
+    if "report_times" not in c:
+        rt = c.get("report_time", "08:00")
+        c["report_times"] = [rt] if rt else ["08:00"]
+    if not c["report_times"]:
+        c["report_times"] = ["08:00"]
     for f in c["favorites"]:
         f.setdefault("alert", True)
     for wl in c["watchlists"]:
@@ -306,14 +310,26 @@ def run_monitor():
             log(f"→ {it['name']} 급변동 알림")
             st["move_date"] = today
 
-    rt = cfg.get("report_time", "08:00")
-    if state.get("last_report_date") != today and f"{now_kst():%H:%M}" >= rt:
+    rep = state.get("report") or {}
+    if rep.get("date") != today:
+        rep = {"date": today, "done": []}
+    now_min = now_kst().hour * 60 + now_kst().minute
+    for t in cfg.get("report_times", []):
+        if t in rep["done"]:
+            continue
         try:
-            run_report()
-            state["last_report_date"] = today
-        except Exception as e:
-            log(f"리포트 오류: {e}")
-
+            hh, mm = map(int, t.split(":"))
+        except Exception:
+            continue
+        tmin = hh * 60 + mm
+        if now_min >= tmin and (now_min - tmin) <= 120:   # 예정 시각 이후 2시간 내 1회
+            try:
+                run_report()
+                rep["done"].append(t)
+                log(f"→ 리포트 전송 ({t})")
+            except Exception as e:
+                log(f"리포트 오류({t}): {e}")
+    state["report"] = rep
     save_json(STATE_FILE, state)
 
 
