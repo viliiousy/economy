@@ -2,9 +2,9 @@ name: Price Monitor
 
 on:
   schedule:
-    - cron: '*/30 * * * *'    # 백업: 외부 크론이 멈춰도 30분에 한 번은 돎
+    - cron: '*/30 * * * *'
   repository_dispatch:
-    types: [run-monitor]      # 외부 크론(cron-job.org)이 1분마다 호출 → 실제 실행
+    types: [run-monitor]
   workflow_dispatch: {}
 
 permissions:
@@ -26,12 +26,13 @@ jobs:
         run: python3 price_watch.py monitor
       - name: Commit data
         if: always()
+        continue-on-error: true          # 이 단계가 어떤 이유로 실패해도 워크플로우는 성공(빨간 X 방지)
         run: |
           git config user.name "price-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for i in 1 2 3 4 5; do
-            git fetch -q origin main
-            git reset -q --mixed origin/main          # 최신 원격 위에 우리 변경만 얹음(충돌 없음)
+            git fetch -q origin main || true
+            git reset -q --mixed FETCH_HEAD || true      # 방금 받은 원격 끝점 기준으로(추적 ref 문제 회피)
             git add -A prices.json watch_state.json history.json
             if git diff --cached --quiet; then
               echo "변경 없음"; exit 0
@@ -42,5 +43,4 @@ jobs:
             fi
             echo "재시도 $i (원격이 먼저 바뀜)"; sleep 2
           done
-          echo "푸시 재시도 모두 실패 — 다음 실행에서 재시도"
-          exit 0   # 일시적 경쟁이어도 워크플로우는 성공 처리(빨간 X 방지)
+          echo "이번엔 못 올림 — 다음 실행에서 재시도"
