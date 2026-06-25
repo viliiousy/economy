@@ -251,8 +251,11 @@ def _yahoo_symbols(it):
 def _yf_series(sym, interval, rng):
     url = f"{YF}{urllib.parse.quote(sym)}?interval={interval}&range={rng}"
     req = urllib.request.Request(url, headers={"User-Agent": HEADERS["User-Agent"]})
-    d = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "replace"))
-    res = d["chart"]["result"][0]
+    try:
+        d = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "replace"))
+        res = d["chart"]["result"][0]
+    except Exception:
+        return []
     ts = res.get("timestamp") or []
     q = res["indicators"]["quote"][0]
     o, h, l, c = q.get("open", []), q.get("high", []), q.get("low", []), q.get("close", [])
@@ -269,16 +272,30 @@ def _yf_series(sym, interval, rng):
     return out
 
 
+# 타임프레임 코드 → (야후 interval, range)
+TIMEFRAMES = {
+    "1":  ("1m",  "1d"),
+    "30": ("30m", "5d"),
+    "60": ("60m", "1mo"),
+    "d":  ("1d",  "1y"),
+    "w":  ("1wk", "5y"),
+    "mo": ("1mo", "max"),
+}
+
+
 def fetch_item_history(it):
     for sym in _yahoo_symbols(it):
-        try:
-            day = _yf_series(sym, "1d", "1y")
-            if not day:
+        day = _yf_series(sym, "1d", "1y")
+        if not day:
+            continue
+        data = {"sym": sym, "d": day}
+        for tf, (interval, rng) in TIMEFRAMES.items():
+            if tf == "d":
                 continue
-            week = _yf_series(sym, "1wk", "5y")
-            return {"sym": sym, "d": day, "w": week}
-        except Exception as e:
-            log(f"hist {sym}: {e}")
+            s = _yf_series(sym, interval, rng)
+            if s:
+                data[tf] = s
+        return data
     return None
 
 
@@ -363,8 +380,10 @@ def run_monitor():
         if floor:
             f = float(floor)
             d = it.get("floorDir", "below")
-            cond = (price < f) if d == "below" else (price > f)
-            if cond and st.get("floor_state") != "in":
+            prev = st.get("last_price")
+            now_cond = (price <= f) if d == "below" else (price >= f)       # 현재 기준 안쪽
+            prev_out = prev is not None and ((prev > f) if d == "below" else (prev < f))  # 1분전엔 기준 바깥
+            if now_cond and prev_out:                                       # 바깥→안쪽 교차 순간만 알림
                 word = "이하로 내려왔어요" if d == "below" else "이상으로 올라왔어요"
                 emo = "\U0001F4C9" if d == "below" else "\U0001F4C8"
                 send_telegram(f"{emo} {it['name']} 가격 알림\n\n기준가 {word}\n"
@@ -372,9 +391,7 @@ def run_monitor():
                               f"기준: {f:,.0f}{it.get('unit','')} {'이하' if d=='below' else '이상'}\n"
                               f"{now_kst():%m-%d %H:%M}\n{link_for(it)}")
                 log(f"→ {it['name']} 가격 알림 ({d})")
-                st["floor_state"] = "in"
-            elif not cond:
-                st["floor_state"] = "out"
+        st["last_price"] = price                                            # 다음 비교용으로 현재가 저장
 
         if pct is not None and abs(pct) >= move_pct and st.get("move_date") != today:
             send_telegram(f"\u26A1 {it['name']} 급변동 ({fmt_chg(pct)})\n\n전일대비 {move_pct:.0f}% 이상 움직였어요.\n"
