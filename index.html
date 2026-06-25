@@ -218,7 +218,13 @@ async function loadConfig(){
 }
 async function refreshPrices(){
   try{
-    const j=await(await fetch(rawUrl('prices.json'))).json();
+    let j=null;
+    if(GH.token){   // GitHub API는 커밋 직후 최신본을 줌(raw CDN 5분 캐시 우회)
+      const u=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/prices.json?ref=${GH.branch}&t=${Date.now()}`;
+      const r=await fetch(u,{headers:{'Authorization':'Bearer '+GH.token,'Accept':'application/vnd.github.raw'},cache:'no-store'});
+      if(r.ok)j=await r.json();
+    }
+    if(!j)j=await(await fetch(rawUrl('prices.json'),{cache:'no-store'})).json();
     PREV=PRICES;PRICES=j.items||{};
     document.getElementById('upd').textContent=j.updated?('업데이트 '+j.updated.replace('T',' ').slice(5,16)):'첫 시세 대기 중';
     if(TAB==='charts')return;
