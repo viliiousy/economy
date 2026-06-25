@@ -105,5 +105,11 @@
   ],
   "report_times": [
     "08:00"
-  ]
+  ],
+  "market_alerts": {
+    "kr_open": true,
+    "kr_close": true,
+    "us_open": true,
+    "us_close": true
+  }
 }
