@@ -23,17 +23,24 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python3 price_watch.py monitor      # 시스템 python3 사용(stdlib만 써서 설치 불필요 → 더 빠름)
+        run: python3 price_watch.py monitor
       - name: Commit data
         if: always()
         run: |
           git config user.name "price-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A prices.json watch_state.json history.json
-          if ! git diff --cached --quiet; then
-            git commit -m "data update [skip ci]"
-            git pull --rebase --autostash origin main || true
-            git push || (git pull --rebase --autostash origin main && git push)
-          else
-            echo "no change"
-          fi
+          for i in 1 2 3 4 5; do
+            git fetch -q origin main
+            git reset -q --mixed origin/main          # 최신 원격 위에 우리 변경만 얹음(충돌 없음)
+            git add -A prices.json watch_state.json history.json
+            if git diff --cached --quiet; then
+              echo "변경 없음"; exit 0
+            fi
+            git commit -q -m "data update [skip ci]"
+            if git push -q origin HEAD:main; then
+              echo "푸시 완료"; exit 0
+            fi
+            echo "재시도 $i (원격이 먼저 바뀜)"; sleep 2
+          done
+          echo "푸시 재시도 모두 실패 — 다음 실행에서 재시도"
+          exit 0   # 일시적 경쟁이어도 워크플로우는 성공 처리(빨간 X 방지)
