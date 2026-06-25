@@ -406,12 +406,15 @@ function chMode(m){chartMode=m;renderCharts();}
 function symFor(it){return it.tv||('KRX:'+it.code);}   // 순수 심볼 → TradingView가 %로 정규화해 KR·US 함께 비교
 function comboChart(wrapId,items){
   const wrap=document.getElementById(wrapId);if(!wrap)return;
+  // 금·환율은 TradingView 심볼이 불안정(없으면 애플로 폴백) → 함께보기 %비교엔 국내·해외 주식만
+  const syms=items.filter(it=>it.type==='kr'||it.type==='us').map(symFor).filter(s=>s&&s.includes(':'));
+  if(!syms.length){wrap.innerHTML='<div class="empty"><span class="big">함께 볼 주식이 없어요</span>국내·해외 주식을 담아주세요<br>(금·환율은 \'따로 보기\'에서 확인)</div>';return;}
   wrap.innerHTML='<div class="combo" id="cbmain"></div>';
   if(!window.TradingView)return;
-  try{new TradingView.widget({container_id:'cbmain',symbol:symFor(items[0]),interval:'D',
+  try{new TradingView.widget({container_id:'cbmain',symbol:syms[0],interval:'D',
     theme:'light',style:'2',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
     hide_side_toolbar:true,allow_symbol_change:false,
-    compareSymbols:items.slice(1).map(it=>({symbol:symFor(it),position:'SameScale'}))});}catch(e){}
+    compareSymbols:syms.slice(1).map(s=>({symbol:s,position:'SameScale'}))});}catch(e){}
 }
 function miniChart(cid,sym){
   try{new TradingView.widget({container_id:cid,symbol:sym,interval:'D',theme:'light',style:'2',locale:'kr',
