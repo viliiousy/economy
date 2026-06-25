@@ -25,7 +25,7 @@
       "code": "005930",
       "type": "kr",
       "tv": "KRX:005930",
-      "floor": null,
+      "floor": 350000,
       "unit": "원",
       "alert": true
     },
