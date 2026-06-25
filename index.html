@@ -76,8 +76,10 @@
   .gcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
   .gtop{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;cursor:pointer}
   .gtv{height:150px;border-top:1px solid var(--line)}
-  img.gtv.navimg{width:100%;height:150px;object-fit:cover;object-position:center;display:block;background:#fff}
-  .gtv.miss{display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:12px}
+  .gtv.miss,.miss{display:flex;align-items:center;justify-content:center;height:150px;color:var(--ink2);font-size:12px}
+  .clegend{display:flex;flex-wrap:wrap;gap:10px 16px;margin:10px 4px 4px;font-size:13px;color:var(--ink)}
+  .clegend .lgi{display:inline-flex;align-items:center;gap:6px}
+  .clegend .lgi i{width:14px;height:3px;border-radius:2px;display:inline-block}
   #mainItems{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
   @media(max-width:560px){#mainItems{grid-template-columns:1fr}}
   .seg2{display:inline-flex;background:var(--surface);border:1px solid var(--line2);border-radius:9px;padding:3px;margin-bottom:12px}
@@ -167,11 +169,11 @@
   </div>
 </div>
 
-<script src="https://s3.tradingview.com/tv.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const LS=localStorage;
 let GH={owner:LS.getItem('gh_owner'),repo:LS.getItem('gh_repo'),branch:LS.getItem('gh_branch')||'main',token:LS.getItem('gh_token')};
-let CONFIG={move_pct:10,favorites:[],watchlists:[]}, SHA=null, PRICES={}, PREV={}, TICKERS=[], TAB='main', activeList=null, chartScope='fav', chartMode='combined', saveTimer=null;
+let CONFIG={move_pct:10,favorites:[],watchlists:[]}, SHA=null, PRICES={}, PREV={}, TICKERS=[], TAB='main', activeList=null, chartScope='fav', chartMode='combined', chartInterval='d', HIST={items:{}}, HIST_AT=0, saveTimer=null;
 
 const TYPE={kr:'국내',us:'해외',exchange:'환율',metal:'금'};
 const unitFor=t=>t==='us'?'$':t==='metal'?'원/g':'원';
@@ -401,50 +403,69 @@ function renderCharts(){
   CONFIG.watchlists.forEach(w=>{h+=`<button class="lchip ${chartScope===w.id?'on':''}" onclick="chScope('${w.id}')">${esc(w.name)}</button>`;});
   h+='</div>';
   h+=`<div class="seg2"><button class="${chartMode==='combined'?'on':''}" onclick="chMode('combined')">함께 보기</button><button class="${chartMode==='separate'?'on':''}" onclick="chMode('separate')">따로 보기</button></div>`;
+  h+=`<div class="seg2" style="max-width:200px"><button class="${chartInterval==='d'?'on':''}" onclick="chInt('d')">일봉</button><button class="${chartInterval==='w'?'on':''}" onclick="chInt('w')">주봉</button></div>`;
   const items=chartScope==='fav'?CONFIG.favorites:(CONFIG.watchlists.find(w=>w.id===chartScope)?.items||[]);
   if(!items.length){el.innerHTML=h+'<div class="empty"><span class="big">표시할 종목이 없어요</span>먼저 종목을 담아주세요</div>';return;}
-  if(chartMode==='combined'){
-    el.innerHTML=h+'<div id="combo"></div>';
-    comboChart('combo',items);
-  }else{
-    h+='<div class="grid">'+items.map((it,i)=>{
-      const q=PRICES[keyOf(it)]||{};
-      let chart;
-      if(it.type==='kr')chart=`<img class="gtv navimg" src="${navImg(it.code)}" loading="lazy" alt="${esc(it.name)}" onerror="this.style.display='none'">`;
-      else if(it.type==='us'||it.type==='exchange')chart=`<div class="gtv" id="g${i}"></div>`;
-      else chart=`<div class="gtv miss">차트 미지원</div>`;
-      return `<div class="gcard"><div class="gtop" onclick='openChart(${attr(it)})'>
-        <div><div class="nm" style="font-size:14px">${esc(it.name)}</div><div class="meta">${TYPE[it.type]||''}</div></div>
-        <div class="pwrap"><div class="price tnum" style="font-size:15px">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div>
-        </div>${chart}</div>`;
-    }).join('')+'</div>';
-    el.innerHTML=h;
-    if(window.TradingView)items.forEach((it,i)=>{if(it.type==='us'||it.type==='exchange')miniChart('g'+i,it.tv||'');});
-  }
+  el.innerHTML=h+'<div id="chartArea"><div class="empty">차트 불러오는 중…</div></div>';
+  loadHistory().then(()=>{if(TAB==='charts')drawCharts(items);});
 }
-const navImg=(code,big)=>`https://ssl.pstatic.net/imgfinance/chart/item/${big?'area/day':'candle/day'}/${code}.png?t=`+Math.floor(Date.now()/300000);
 function chMode(m){chartMode=m;renderCharts();}
-function symFor(it){return it.tv||('KRX:'+it.code);}   // 순수 심볼 → TradingView가 %로 정규화해 KR·US 함께 비교
-function comboChart(wrapId,items){
-  const wrap=document.getElementById(wrapId);if(!wrap)return;
-  // 겹쳐보기(오버레이)는 TradingView만 가능 → 위젯이 지원하는 미국주식·환율만. 한국 종목/ETF·금은 위젯에 없음
-  const syms=items.filter(it=>it.type==='us'||it.type==='exchange').map(symFor).filter(s=>s&&s.includes(':'));
-  const hasKr=items.some(it=>it.type==='kr');
-  if(!syms.length){
-    wrap.innerHTML='<div class="empty"><span class="big">겹쳐 볼 종목이 없어요</span>겹쳐보기는 미국주식·환율만 지원해요'+(hasKr?'<br>한국 종목은 \'따로 보기\'에서 네이버 차트로 확인하세요':'')+'</div>';
-    return;
-  }
-  wrap.innerHTML='<div class="combo" id="cbmain"></div>'+(hasKr?'<div class="hint" style="margin:8px 2px 0">※ 한국 종목은 겹쳐보기에 표시되지 않아요 (따로 보기에서 확인)</div>':'');
-  if(!window.TradingView)return;
-  try{new TradingView.widget({container_id:'cbmain',symbol:syms[0],interval:'D',
-    theme:'light',style:'2',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
-    hide_side_toolbar:true,allow_symbol_change:false,
-    compareSymbols:syms.slice(1).map(s=>({symbol:s,position:'SameScale'}))});}catch(e){}
+function chInt(v){chartInterval=v;renderCharts();}
+async function loadHistory(){
+  if(Object.keys(HIST.items||{}).length && Date.now()-HIST_AT<60000)return;
+  try{
+    let j=null;
+    if(GH.token){
+      const u=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/history.json?ref=${GH.branch}&t=${Date.now()}`;
+      const r=await fetch(u,{headers:{'Authorization':'Bearer '+GH.token,'Accept':'application/vnd.github.raw'},cache:'no-store'});
+      if(r.ok)j=await r.json();
+    }
+    if(!j)j=await(await fetch(rawUrl('history.json'),{cache:'no-store'})).json();
+    if(j&&j.items){HIST=j;HIST_AT=Date.now();}
+  }catch(e){}
 }
-function miniChart(cid,sym){
-  try{new TradingView.widget({container_id:cid,symbol:sym,interval:'D',theme:'light',style:'2',locale:'kr',
-    timezone:'Asia/Seoul',autosize:true,hide_top_toolbar:true,hide_side_toolbar:true,hide_legend:true,
-    allow_symbol_change:false,save_image:false,withdateranges:false,backgroundColor:'#FFFFFF'});}catch(e){}
+const LWUP='#E03A4E',LWDN='#2563EB';
+const candleData=a=>a.map(r=>({time:r[0],open:r[1],high:r[2],low:r[3],close:r[4]}));
+const pctData=a=>{if(!a.length)return [];const b=a[0][4]||1;return a.map(r=>({time:r[0],value:(r[4]/b-1)*100}));};
+function serOf(it){const hd=HIST.items[keyOf(it)];return hd&&hd[chartInterval]||null;}
+function drawCharts(items){
+  const area=document.getElementById('chartArea');if(!area)return;
+  if(!window.LightweightCharts){area.innerHTML='<div class="empty">차트 라이브러리를 불러오지 못했어요</div>';return;}
+  if(chartMode==='combined')drawCombined(area,items);else drawSeparate(area,items);
+}
+function baseChartOpts(h){return{height:h,layout:{background:{color:'#fff'},textColor:'#6B7280',fontFamily:'inherit',attributionLogo:false},
+  grid:{vertLines:{visible:false},horzLines:{color:'#F1F0EC'}},rightPriceScale:{borderVisible:false},
+  timeScale:{borderVisible:false},crosshair:{mode:1},localization:{locale:'ko-KR'}};}
+function drawSeparate(area,items){
+  area.innerHTML='<div class="grid"></div>';const grid=area.querySelector('.grid');
+  items.forEach((it,i)=>{
+    const q=PRICES[keyOf(it)]||{};
+    const card=document.createElement('div');card.className='gcard';
+    card.innerHTML=`<div class="gtop" onclick='openChart(${attr(it)})'><div><div class="nm" style="font-size:14px">${esc(it.name)}</div><div class="meta">${TYPE[it.type]||''}</div></div>
+      <div class="pwrap"><div class="price tnum" style="font-size:15px">${fmtPrice(it,q.price)}</div>${deltaHtml(q.pct)}</div></div><div class="gtv" id="lw${i}"></div>`;
+    grid.appendChild(card);
+    const ser=serOf(it),box=document.getElementById('lw'+i);
+    if(!ser||!ser.length){box.innerHTML='<div class="miss">'+(it.type==='metal'?'차트 미지원':'데이터 준비 중 (20분 내 수집)')+'</div>';return;}
+    const chart=LightweightCharts.createChart(box,Object.assign(baseChartOpts(150),{handleScroll:false,handleScale:false}));
+    const s=chart.addCandlestickSeries({upColor:LWUP,downColor:LWDN,borderVisible:false,wickUpColor:LWUP,wickDownColor:LWDN});
+    s.setData(candleData(ser));chart.timeScale().fitContent();
+  });
+}
+const PAL=['#2563EB','#E03A4E','#0E9F6E','#9333EA','#F59E0B','#0891B2','#DB2777','#65A30D','#E11D48','#4F46E5'];
+function drawCombined(area,items){
+  const list=items.filter(it=>{const s=serOf(it);return s&&s.length;});
+  if(!list.length){area.innerHTML='<div class="empty"><span class="big">차트 데이터 준비 중</span>종목을 담으면 20분 내 자동 수집돼요<br>(수집 후 다시 열어보세요)</div>';return;}
+  area.innerHTML='<div class="combo" id="cbig"></div><div id="cblegend" class="clegend"></div>';
+  const chart=LightweightCharts.createChart(document.getElementById('cbig'),Object.assign(baseChartOpts(Math.round(window.innerHeight*0.46)),{}));
+  let leg='';
+  list.forEach((it,i)=>{
+    const c=PAL[i%PAL.length];
+    const s=chart.addLineSeries({color:c,lineWidth:2,priceFormat:{type:'percent'},lastValueVisible:true,priceLineVisible:false});
+    s.setData(pctData(serOf(it)));
+    leg+=`<span class="lgi"><i style="background:${c}"></i>${esc(it.name)}</span>`;
+  });
+  chart.timeScale().fitContent();
+  document.getElementById('cblegend').innerHTML=leg;
 }
 
 function tab(t){TAB=t;['main','watch','charts'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===t?'block':'none';document.getElementById('t-'+x).classList.toggle('on',x===t);});render();}
@@ -547,19 +568,18 @@ function askText(title,ph,cb,init){
 }
 document.getElementById('ov').addEventListener('click',e=>{if(e.target.id==='ov')closeOv();});
 
-function openChart(it){
+async function openChart(it){
   document.getElementById('c-name').textContent=it.name;
   document.getElementById('chart').classList.add('on');
   const box=document.getElementById('tvbox');
-  if(it.type==='kr'){
-    box.innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;background:#fff;overflow:auto">
-      <img src="${navImg(it.code,false)}" alt="${esc(it.name)}" style="max-width:100%;height:auto" onerror="this.parentNode.innerHTML='<div class=\\'empty\\'>차트를 불러오지 못했어요</div>'"></div>`;
-  }else if((it.type==='us'||it.type==='exchange')&&window.TradingView){
-    box.innerHTML='<div id="tvfull" style="height:100%"></div>';
-    new TradingView.widget({container_id:'tvfull',symbol:it.tv||'',interval:'D',
-      theme:'light',style:'1',locale:'kr',timezone:'Asia/Seoul',autosize:true,withdateranges:true,
-      hide_side_toolbar:true,allow_symbol_change:false});
-  }else box.innerHTML='<div class="empty">이 항목은 차트를 지원하지 않아요</div>';
+  box.innerHTML='<div class="empty">차트 불러오는 중…</div>';
+  await loadHistory();
+  const ser=serOf(it);
+  if(!ser||!ser.length||!window.LightweightCharts){box.innerHTML='<div class="empty">'+(it.type==='metal'?'이 항목은 차트를 지원하지 않아요':'차트 데이터 준비 중이에요 (20분 내 수집)')+'</div>';return;}
+  box.innerHTML='';
+  const chart=LightweightCharts.createChart(box,Object.assign(baseChartOpts(box.clientHeight||360),{autoSize:true}));
+  const s=chart.addCandlestickSeries({upColor:LWUP,downColor:LWDN,borderVisible:false,wickUpColor:LWUP,wickDownColor:LWDN});
+  s.setData(candleData(ser));chart.timeScale().fitContent();
 }
 function closeChart(){document.getElementById('chart').classList.remove('on');document.getElementById('tvbox').innerHTML='';}
 

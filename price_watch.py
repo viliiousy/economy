@@ -26,6 +26,7 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 CONFIG     = os.path.join(BASE_DIR, "config.json")
 PRICES     = os.path.join(BASE_DIR, "prices.json")
 STATE_FILE = os.path.join(BASE_DIR, "watch_state.json")
+HISTORY_FILE = os.path.join(BASE_DIR, "history.json")
 LOG_FILE   = os.path.join(BASE_DIR, "price_watch.log")
 
 HEADERS = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -230,6 +231,70 @@ def all_price_items(cfg):
     return out
 
 
+YF = "https://query1.finance.yahoo.com/v8/finance/chart/"
+
+
+def _yahoo_symbols(it):
+    t = it.get("type")
+    if t == "us":
+        tv = it.get("tv", "")
+        base = tv.split(":")[-1] if ":" in tv else it["code"].split(".")[0]
+        return [base]
+    if t == "exchange":
+        return ["KRW=X"]                       # USD/KRW
+    if t == "kr":
+        c = it["code"]
+        return [f"{c}.KS", f"{c}.KQ"]          # 코스피 먼저, 안 되면 코스닥
+    return []
+
+
+def _yf_series(sym, interval, rng):
+    url = f"{YF}{urllib.parse.quote(sym)}?interval={interval}&range={rng}"
+    req = urllib.request.Request(url, headers={"User-Agent": HEADERS["User-Agent"]})
+    d = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "replace"))
+    res = d["chart"]["result"][0]
+    ts = res.get("timestamp") or []
+    q = res["indicators"]["quote"][0]
+    o, h, l, c = q.get("open", []), q.get("high", []), q.get("low", []), q.get("close", [])
+    usd = res["meta"].get("currency") == "USD"
+    rnd = (lambda x: round(x, 2)) if usd else (lambda x: round(x))
+    out = []
+    for i, t in enumerate(ts):
+        try:
+            if None in (o[i], h[i], l[i], c[i]):
+                continue
+            out.append([t, rnd(o[i]), rnd(h[i]), rnd(l[i]), rnd(c[i])])
+        except Exception:
+            continue
+    return out
+
+
+def fetch_item_history(it):
+    for sym in _yahoo_symbols(it):
+        try:
+            day = _yf_series(sym, "1d", "1y")
+            if not day:
+                continue
+            week = _yf_series(sym, "1wk", "5y")
+            return {"sym": sym, "d": day, "w": week}
+        except Exception as e:
+            log(f"hist {sym}: {e}")
+    return None
+
+
+def run_history():
+    cfg = load_config()
+    out = {}
+    for it in all_price_items(cfg):
+        if it.get("type") == "metal":
+            continue
+        h = fetch_item_history(it)
+        if h:
+            out[item_key(it)] = h
+    save_json(HISTORY_FILE, {"updated": now_kst().isoformat(timespec="seconds"), "items": out})
+    log(f"→ 차트 데이터 {len(out)}개 갱신")
+
+
 def alert_items(cfg):
     out, keys = [], set()
     for it in cfg["favorites"]:
@@ -338,6 +403,12 @@ def run_monitor():
                 log(f"리포트 오류({t}): {e}")
     state["report"] = rep
     check_market_alerts(cfg, state)
+    if now_kst().timestamp() - state.get("hist_at", 0) > 1200:   # 차트 데이터는 20분마다
+        try:
+            run_history()
+            state["hist_at"] = now_kst().timestamp()
+        except Exception as e:
+            log(f"차트데이터 오류: {e}")
     save_json(STATE_FILE, state)
 
 
@@ -406,6 +477,8 @@ def main():
         print_chat_id()
     elif mode == "report":
         run_report()
+    elif mode == "history":
+        run_history()
     else:
         run_monitor()
 
