@@ -11,7 +11,7 @@ prices.json 기록 대상: 즐겨찾기 + 관심종목 전체 (대시보드 표�
 표준 라이브러리만 사용.
 """
 
-import sys, os, json, re, urllib.request, urllib.parse
+import sys, os, json, re, time, urllib.request, urllib.parse, urllib.error
 from datetime import datetime, timezone, timedelta
 try:
     from zoneinfo import ZoneInfo
@@ -20,10 +20,14 @@ except Exception:
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 CHAT_ID   = os.environ.get("CHAT_ID", "")
+# 설정(관심종목·알림)은 이제 bashy.app 이 관리한다. 레포의 config.json 은 쓰지 않는다.
+# 예전에는 브라우저가 GitHub PAT 를 localStorage 에 들고 그 파일을 직접 커밋했다 —
+# 서드파티 CDN 스크립트를 쓰는 페이지에 repo 쓰기 토큰을 두는 구조였다.
+CONFIG_URL  = os.environ.get("CONFIG_URL", "https://bashy.app/api/econ-config")
+ECON_SECRET = os.environ.get("ECON_SECRET", "")
 
 KST        = timezone(timedelta(hours=9))
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-CONFIG     = os.path.join(BASE_DIR, "config.json")
 PRICES     = os.path.join(BASE_DIR, "prices.json")
 STATE_FILE = os.path.join(BASE_DIR, "watch_state.json")
 HISTORY_FILE = os.path.join(BASE_DIR, "history.json")
@@ -167,12 +171,42 @@ def send_telegram(text):
         raise RuntimeError(f"텔레그램 전송 실패: {resp}")
 
 
+def fetch_config():
+    """bashy.app 에서 설정을 받아온다.
+
+    실패하면 빈 설정으로 조용히 넘어가지 않고 예외를 던진다.
+    빈 관심종목으로 도는 건 '알림 보낼 게 없음'과 겉보기가 똑같아서,
+    고장이 몇 주씩 안 보이게 된다. 워크플로가 빨간불이 되는 편이 낫다.
+    """
+    if not ECON_SECRET:
+        raise RuntimeError("ECON_SECRET 환경변수가 없습니다")
+    last = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(
+                CONFIG_URL, headers={"Authorization": "Bearer " + ECON_SECRET})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                d = json.loads(r.read().decode("utf-8"))
+            cfg = d.get("config")
+            if not cfg:
+                raise RuntimeError(d.get("error") or "설정이 비어 있습니다")
+            return cfg
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", "replace")[:200]
+            except Exception:
+                pass
+            last = f"HTTP {e.code} {body}"
+        except Exception as e:
+            last = str(e)
+        if attempt < 2:
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"설정을 가져오지 못했습니다: {last}")
+
+
 def load_config():
-    try:
-        with open(CONFIG, encoding="utf-8") as f:
-            c = json.load(f)
-    except Exception:
-        c = {}
+    c = fetch_config()
     c.setdefault("favorites", [])
     c.setdefault("move_pct", 10)
     if "watchlists" not in c:        # 구버전(단일 watchlist) 마이그레이션
