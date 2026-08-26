@@ -23,10 +23,11 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+          # 관심종목 설정은 bashy.app 이 가지고 있다. 이 비밀은 그걸 '읽기만' 하는 통로다.
+          ECON_SECRET: ${{ secrets.ECON_SECRET }}
         run: python3 price_watch.py monitor
       - name: Commit data
         if: always()
-        continue-on-error: true          # 이 단계가 어떤 이유로 실패해도 워크플로우는 성공(빨간 X 방지)
         run: |
           git config user.name "price-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -43,4 +44,7 @@ jobs:
             fi
             echo "재시도 $i (원격이 먼저 바뀜)"; sleep 2
           done
-          echo "이번엔 못 올림 — 다음 실행에서 재시도"
+          # 5번 다 실패하면 조용히 넘기지 않는다. 예전엔 continue-on-error + exit 0 이라
+          # 데이터가 몇 시간씩 안 올라가도 워크플로는 계속 초록불이었다.
+          echo "5회 시도 모두 실패 — 데이터가 올라가지 않았습니다"
+          exit 1
