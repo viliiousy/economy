@@ -214,6 +214,7 @@ def load_config():
         old = c.get("watchlist", [])
         c["watchlists"] = [{"id": "w1", "name": "관심종목", "items": old}] if old else []
     c.setdefault("watchlists", [])
+    c.setdefault("holdings", [])
     if "report_times" not in c:
         rt = c.get("report_time", "08:00")
         c["report_times"] = [rt] if rt else ["08:00"]
@@ -257,8 +258,10 @@ def item_key(it):
 
 
 def all_price_items(cfg):
+    # 보유 종목도 시세를 받아야 앱에서 평가액이 나온다.
+    # 알림 대상(alert_items)에는 넣지 않는다 — 보유했다고 알림까지 원하는 건 아니다.
     seen, out = set(), []
-    for it in cfg["favorites"] + all_watch_items(cfg):
+    for it in cfg["favorites"] + all_watch_items(cfg) + cfg.get("holdings", []):
         k = item_key(it)
         if k not in seen:
             seen.add(k)
