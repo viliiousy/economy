@@ -24,11 +24,11 @@ CHAT_ID   = os.environ.get("CHAT_ID", "")
 # 예전에는 브라우저가 GitHub PAT 를 localStorage 에 들고 그 파일을 직접 커밋했다 —
 # 서드파티 CDN 스크립트를 쓰는 페이지에 repo 쓰기 토큰을 두는 구조였다.
 CONFIG_URL  = os.environ.get("CONFIG_URL", "https://bashy.app/api/econ-config")
+DATA_URL    = os.environ.get("DATA_URL",   "https://bashy.app/api/econ-data")
 ECON_SECRET = os.environ.get("ECON_SECRET", "")
 
 KST        = timezone(timedelta(hours=9))
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-PRICES     = os.path.join(BASE_DIR, "prices.json")
 STATE_FILE = os.path.join(BASE_DIR, "watch_state.json")
 HISTORY_FILE = os.path.join(BASE_DIR, "history.json")
 LOG_FILE   = os.path.join(BASE_DIR, "price_watch.log")
@@ -190,6 +190,7 @@ def fetch_config():
             cfg = d.get("config")
             if not cfg:
                 raise RuntimeError(d.get("error") or "설정이 비어 있습니다")
+            cfg["_uid"] = d.get("uid")     # 시세를 어느 사용자 밑에 넣을지
             return cfg
         except urllib.error.HTTPError as e:
             body = ""
@@ -373,6 +374,45 @@ def print_chat_id():
         print(f"  {cid}  ({nm})")
 
 
+def push_prices(cfg, quotes):
+    """시세를 bashy.app 에 보낸다 (거기서 Firebase 로 들어간다).
+
+    예전에는 prices.json 을 레포에 커밋했다. 두 가지가 문제였다.
+      1) raw.githubusercontent.com 은 max-age=300 이고 쿼리스트링을 무시한다.
+         화면이 0~5분 늦은 시세를 봤다 (실측: 같은 값이 4분 넘게 고정).
+      2) 1분마다 커밋이 쌓여 레포가 하루 1,440건씩 불어났다.
+
+    실패해도 알림 자체는 계속 보내야 하므로 예외를 던지지 않는다.
+    다만 조용히 넘기지도 않는다 — 로그에 남기고, 워크플로 로그에서 보이게 한다.
+    """
+    uid = cfg.get("_uid")
+    if not uid:
+        log("시세 전송 건너뜀: uid 를 못 받았습니다")
+        return False
+    payload = json.dumps({
+        "uid": uid,
+        "prices": {"updated": now_kst().isoformat(timespec="seconds"), "items": quotes},
+    }).encode("utf-8")
+    req = urllib.request.Request(DATA_URL, data=payload, method="POST", headers={
+        "Authorization": "Bearer " + ECON_SECRET,
+        "Content-Type": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            r.read()
+        return True
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            pass
+        log(f"시세 전송 실패: HTTP {e.code} {body}")
+    except Exception as e:
+        log(f"시세 전송 실패: {e}")
+    return False
+
+
 def run_monitor():
     cfg = load_config()
     state = load_state()
@@ -387,8 +427,8 @@ def run_monitor():
         except Exception as e:
             log(str(e))
 
-    # 대시보드용 시세 파일 기록
-    save_json(PRICES, {"updated": now_kst().isoformat(timespec="seconds"), "items": quotes})
+    # 대시보드용 시세 전송 (예전에는 prices.json 을 레포에 커밋했다 — 아래 push_prices 주석 참고)
+    push_prices(cfg, quotes)
 
     if ok == 0 and all_price_items(cfg):
         if not state["error_notified"]:
