@@ -1,11 +1,22 @@
 name: Price Monitor
 
 on:
+  # ── 왜 이렇게 잘게 나눴는가 ─────────────────────────────────────
+  # 예전엔 바깥 크론이 1분마다 repository_dispatch 를 쏴서 하루 1,400회를 돌았다.
+  # 새벽 3시에도, 주말에도 똑같이 돌았다. 그러다 2026-08-26 GitHub Actions 장애 때
+  # 러너를 못 받은 run 이 전부 '실패 메일'로 돌아왔다. 코드는 멀쩡했는데
+  # 돌린 횟수가 많다는 이유만으로 메일함이 터진 것이다.
+  # 그래서 '움직이는 시간엔 촘촘히, 안 움직이는 시간엔 드물게' 로 바꿨다.
+  # 시각은 전부 UTC 다. KST = UTC+9, ET = UTC-4(서머) / UTC-5(겨울).
   schedule:
-    - cron: '*/30 * * * *'
-  repository_dispatch:
-    types: [run-monitor]
+    - cron: '*/5 0-6 * * 1-5'         # 한국장 09:00~16:00 KST
+    - cron: '*/5 13-20 * * 1-5'       # 미국장 09:30~16:00 ET (서머·겨울 양쪽 포함)
+    - cron: '*/30 7-12,21-23 * * 1-5' # 장 밖 — 코인/환율/장마감 알림용 최소 감시
+    - cron: '*/30 * * * 0,6'          # 주말 — 코인과 환율은 쉬지 않는다
   workflow_dispatch: {}
+  # repository_dispatch 는 뺐다.
+  # 바깥에서 1분마다 두드리던 통로였는데, 그게 위에 적은 폭주의 원인이었다.
+  # 급할 땐 Actions 탭의 'Run workflow' 로 손으로 돌린다.
 
 permissions:
   contents: write
