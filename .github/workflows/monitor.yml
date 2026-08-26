@@ -34,7 +34,8 @@ jobs:
           for i in 1 2 3 4 5; do
             git fetch -q origin main || true
             git reset -q --mixed FETCH_HEAD || true      # 방금 받은 원격 끝점 기준으로(추적 ref 문제 회피)
-            git add -A prices.json watch_state.json history.json
+            # prices.json 은 더 이상 파일로 쓰지 않는다 (bashy.app → Firebase 로 간다)
+            git add -A watch_state.json history.json
             if git diff --cached --quiet; then
               echo "변경 없음"; exit 0
             fi
