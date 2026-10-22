@@ -162,6 +162,11 @@ def link_for(item):
 
 
 def send_telegram(text):
+    # 2026-10-22: 시세 알림은 bashy.app 의 앱 알림으로 옮겼다(lib/econ-alerts.js — 사용자마다, 10분마다).
+    # 여기서 또 보내면 같은 알림이 두 번 온다. 다시 켜려면 워크플로 env 에 TELEGRAM_ON: "1" 을 넣는다.
+    if os.environ.get("TELEGRAM_ON") != "1":
+        log("텔레그램 꺼짐(앱 알림으로 이전): " + text.split("\n")[0][:60])
+        return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": CHAT_ID, "text": text,
                                    "disable_web_page_preview": "true"}).encode()
